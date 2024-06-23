@@ -1,0 +1,6 @@
+{:paths ["scripts"]
+ :min-bb-version "0.4.0"
+ :tasks { compile { :doc "- compiles"
+                    :task (do (shell "gcc -std=c99 -Wall main.c mpc.c -o out" {:out :inherit })) }
+           }
+ }
