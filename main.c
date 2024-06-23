@@ -63,12 +63,12 @@ typedef struct {
 
 typedef struct {
     uint8_t *code;
-    int code_size;
+    int code_count;
 
     // global variable space
     int *globals;
     int nglobals;
-
+    //program counter
     int pc;
 
     // Operand stack, grows upwards
@@ -77,20 +77,22 @@ typedef struct {
     lobj* values;
     int values_count;
 
+    //stack pointer
     int sp;
     //Context call_stack[DEFAULT_CALL_STACK_SIZE];
 } VM;
 
-VM *vm_create(uint8_t *code, int code_size, int *globals, int nglobals, lobj* values, int values_count) {
+VM *vm_create(uint8_t *code, int code_count, int *globals, int nglobals, lobj* values, int values_count) {
     VM* vm = calloc(1, (sizeof(VM)));
     vm->code = code;
-    vm->code_size = code_size;
+    vm->code_count = code_count;
     vm->globals = globals;
     vm->nglobals = nglobals;
 
     vm->values = values;
     vm->values_count = values_count;
 
+    printf("VM SP INITIALIZED %d\n", vm->sp); 
     return vm;
 }
 
@@ -99,7 +101,7 @@ void vm_push(VM *vm, lobj value) {
 }
 
 lobj vm_pop(VM *vm) {
-    return vm->stack[vm->sp--];
+    return vm->stack[--vm->sp];
 }
 
 /* Create a new number type lval */
@@ -133,7 +135,7 @@ typedef struct {
     int val_cap;
 } Compiler;
 
-Compiler* compiler_new() {
+Compiler* compiler_create() {
     Compiler* compiler = malloc(sizeof(Compiler));
     
     compiler->values = malloc(sizeof(lobj) * 256);
@@ -240,13 +242,14 @@ void emit_code(mpc_ast_t* ast, Compiler* compiler) {
             exit(1);
         }
         int idx = compiler_add_constant(compiler, lobj_num(x)); 
+        compiler_emit(compiler, I_LOAD);
         compiler_emit(compiler, (uint8_t)idx);
-        printf("LOADCONST %f at %d \n",x, idx);
+        printf("LOADCONST at %d\n", idx);
         
     } 
 
     if(strstr(ast->tag, "symbol")) {
-        char* op = ast->tag;
+        char* op = ast->contents;
         if (strcmp("+", op) == 0) {
             compiler_emit(compiler, I_ADD);
         } else if (strcmp("-", op) == 0) {
@@ -260,7 +263,7 @@ void emit_code(mpc_ast_t* ast, Compiler* compiler) {
         } 
     }
     /* Iterate s expression */
-    for(int i = 0; i < ast->children_num; i++) {
+    for(int i = ast->children_num-1; i >= 0; i--) {
         if (strcmp(ast->children[i]->contents, "(") == 0) { continue; }
         if (strcmp(ast->children[i]->contents, ")") == 0) { continue; }
         if (strcmp(ast->children[i]->tag,  "regex") == 0) { continue; }
@@ -271,12 +274,15 @@ void emit_code(mpc_ast_t* ast, Compiler* compiler) {
 
 
 void vm_exec(VM *vm, int start_ip, int flags) {
-    int ip = start_ip;
-    int opcode = vm->code[ip];
-    while (opcode != I_HALT && vm->pc < vm->code_size) {
+    while (vm->pc < vm->code_count) {
         int instruction = vm->code[vm->pc];
         switch (instruction) {
             case I_HALT:
+                printf("HALTED: ");
+                for(int i = 0; i < vm->sp; i++) {
+                    lobj_println(vm->stack[i]);
+                }
+                puts("");
                 return;
             case I_LOAD: {
                 int const_idx = vm->code[++vm->pc]; 
@@ -291,6 +297,7 @@ void vm_exec(VM *vm, int start_ip, int flags) {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
                     lobj result = {LVAL_NUM, {.num = a.v.num + b.v.num}};
+                    printf("RESULT ADD:");lobj_println(result);
                     vm_push(vm, result);
                 } else {
                     puts("typeerror");
@@ -300,7 +307,7 @@ void vm_exec(VM *vm, int start_ip, int flags) {
             case I_SUB: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
-                    lobj result = {LVAL_NUM, {.num = a.v.num + b.v.num}};
+                    lobj result = {LVAL_NUM, {.num = a.v.num - b.v.num}};
                     vm_push(vm, result);
                 } else {
                     puts("typeerror");
@@ -384,19 +391,22 @@ int main(int argc, char** argv) {
         /* On Success Print the AST */
         mpc_ast_print(r.output);
         mpc_ast_t* a = r.output;
-        Compiler* compiler = compiler_new();
+        Compiler* compiler = compiler_create();
         emit_code(a, compiler);
+        compiler_emit(compiler, I_HALT);
+//      for(int i = 0; i < compiler->values_count; i++) {
+//          lobj_print(compiler->values[i]); printf(",");
+//      }
 
-        for(int i = 0; i < compiler->values_count; i++) {
-            lobj_print(compiler->values[i]); puts(",");
-        }
-
+        printf("code_count %d\n", compiler->code_count);
+        printf("values_count %d\n", compiler->values_count);
         VM* vm = vm_create(compiler->code, compiler->code_count,
                            NULL, 0,
                            compiler->values, compiler->values_count);
 
-        //vm_exec(vm, 0, 0);
+        vm_exec(vm, 0, 0);
         compiler_free(compiler);
+        free(vm);
         //lobj_println(result);
         mpc_ast_delete(r.output);
     } else {
