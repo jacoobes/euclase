@@ -241,6 +241,8 @@ void emit_code(mpc_ast_t* ast, Compiler* compiler) {
         }
         int idx = compiler_add_constant(compiler, lobj_num(x)); 
         compiler_emit(compiler, (uint8_t)idx);
+        printf("LOADCONST %f at %d \n",x, idx);
+        
     } 
 
     if(strstr(ast->tag, "symbol")) {
@@ -342,6 +344,18 @@ void vm_exec(VM *vm, int start_ip, int flags) {
 
 }
 
+void debug_print_instruction(int opcode) {
+    switch(opcode) {
+        case I_LOAD: printf("I_LOAD_CONST"); break;
+        case I_ADD: printf("I_ADD"); break;
+        case I_SUB: printf("I_SUB"); break;
+        case I_MUL: printf("I_MUL"); break;
+        case I_DIV: printf("I_DIV"); break;
+        case I_MOD: printf("I_MOD"); break;
+        default: printf("UNKNOWN(%d)", opcode);
+    }
+}
+
 int main(int argc, char** argv) {
   puts("Version 0.0.0.0.3");
   puts("Press Ctrl+c to Exit\n");
@@ -373,7 +387,15 @@ int main(int argc, char** argv) {
         Compiler* compiler = compiler_new();
         emit_code(a, compiler);
 
+        for(int i = 0; i < compiler->values_count; i++) {
+            lobj_print(compiler->values[i]); puts(",");
+        }
 
+        VM* vm = vm_create(compiler->code, compiler->code_count,
+                           NULL, 0,
+                           compiler->values, compiler->values_count);
+
+        //vm_exec(vm, 0, 0);
         compiler_free(compiler);
         //lobj_println(result);
         mpc_ast_delete(r.output);
