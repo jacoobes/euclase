@@ -37,17 +37,14 @@ enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXPR };
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 enum Instruction {
     I_HALT        , // End execution 
-    I_LOAD        , //I_LOAD
+    I_LOAD        , // I_LOAD
     I_NEGATE      , // negate a number
     I_ADD         , // add two values
     I_SUB         , // subtract two numbers
     I_MUL         , // multiply two numbers
     I_DIV         , // divide two numbers
     I_MOD         , // modulus two numbers
-    I_LTE         , 
-    I_NOT         , // IfStringEquals
-    I_AND         , // IfBoEq
-    I_OR          , // Or boolean operator
+    I_CALL        ,
 };
 typedef union {
     double num;
@@ -60,6 +57,12 @@ typedef struct {
   Value v;
 } lobj; //lisp object
 
+#define DEFAULT_CALL_STACK_SIZE 256
+#define DEFAULT_NUM_LOCALS 10
+typedef struct {
+    uint8_t returnip;
+    lobj locals[DEFAULT_NUM_LOCALS];
+} Context;
 
 typedef struct {
     uint8_t *code;
@@ -79,7 +82,7 @@ typedef struct {
 
     //stack pointer
     int sp;
-    //Context call_stack[DEFAULT_CALL_STACK_SIZE];
+    Context call_stack[DEFAULT_CALL_STACK_SIZE];
 } VM;
 
 VM *vm_create(uint8_t *code, int code_count, int *globals, int nglobals, lobj* values, int values_count) {
@@ -245,7 +248,6 @@ void emit_code(mpc_ast_t* ast, Compiler* compiler) {
         compiler_emit(compiler, I_LOAD);
         compiler_emit(compiler, (uint8_t)idx);
         printf("LOADCONST at %d\n", idx);
-        
     } 
 
     if(strstr(ast->tag, "symbol")) {
@@ -271,9 +273,14 @@ void emit_code(mpc_ast_t* ast, Compiler* compiler) {
     }
 }
 
-
+Context* vm_context_init() {
+    Context* ctx = calloc(1,sizeof(Context));
+    return ctx;
+}
 
 void vm_exec(VM *vm, int start_ip, int flags) {
+    // callstackp 
+    int callstackp = 0;
     while (vm->pc < vm->code_count) {
         int instruction = vm->code[vm->pc];
         switch (instruction) {
@@ -315,33 +322,40 @@ void vm_exec(VM *vm, int start_ip, int flags) {
                 }
             } break;
             
-            case I_MUL:
-                // Multiply two numbers
-                break;
-            
-            case I_DIV:
-                // Divide two numbers
-                break;
-            
-            case I_MOD: // Modulus two numbers
-                break;
-            
-            case I_LTE:
-                // Less than or equal to
-                break;
-            
-            case I_NOT:
-                // Logical NOT
-                break;
-            
-            case I_AND:
-                // Logical AND
-                break;
-            
-            case I_OR:
-                // Logical OR
-                break;
-            
+            case I_MUL: {
+                lobj b = vm_pop(vm); lobj a = vm_pop(vm);
+                if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
+                    lobj result = {LVAL_NUM, {.num = a.v.num * b.v.num}};
+                    vm_push(vm, result);
+                } else {
+                    puts("typeerror");
+                    exit(1);
+                }
+            } break;
+            case I_DIV: {
+                lobj b = vm_pop(vm); lobj a = vm_pop(vm);
+                if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
+                    lobj result = {LVAL_NUM, {.num = a.v.num / b.v.num}};
+                    vm_push(vm, result);
+                } else {
+                    puts("typeerror");
+                    exit(1);
+                }
+            } break;
+            case I_MOD: {
+                lobj b = vm_pop(vm); lobj a = vm_pop(vm);
+                if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
+                    lobj result = {LVAL_NUM, {.num = a.v.num / b.v.num}};
+                    vm_push(vm, result);
+                } else {
+                    puts("typeerror");
+                    exit(1);
+                }
+            } break;
+            case I_CALL: {
+                
+
+            } break;
             default:
                 // Handle unknown instruction
                 break;
@@ -351,17 +365,6 @@ void vm_exec(VM *vm, int start_ip, int flags) {
 
 }
 
-void debug_print_instruction(int opcode) {
-    switch(opcode) {
-        case I_LOAD: printf("I_LOAD_CONST"); break;
-        case I_ADD: printf("I_ADD"); break;
-        case I_SUB: printf("I_SUB"); break;
-        case I_MUL: printf("I_MUL"); break;
-        case I_DIV: printf("I_DIV"); break;
-        case I_MOD: printf("I_MOD"); break;
-        default: printf("UNKNOWN(%d)", opcode);
-    }
-}
 
 int main(int argc, char** argv) {
   puts("Version 0.0.0.0.3");
