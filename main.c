@@ -46,6 +46,7 @@ enum Instruction {
     I_MOD         , // modulus two numbers
     I_CALL        ,
 };
+
 typedef union {
     double num;
     int err;
@@ -59,9 +60,10 @@ typedef struct {
 
 #define DEFAULT_CALL_STACK_SIZE 256
 #define DEFAULT_NUM_LOCALS 10
+
 typedef struct {
     uint8_t returnip;
-    lobj locals[DEFAULT_NUM_LOCALS];
+    lobj* locals; //the array of locals
 } Context;
 
 typedef struct {
@@ -82,10 +84,20 @@ typedef struct {
 
     //stack pointer
     int sp;
+
+
     Context call_stack[DEFAULT_CALL_STACK_SIZE];
+    int frame_count;
+
 } VM;
 
-VM *vm_create(uint8_t *code, int code_count, int *globals, int nglobals, lobj* values, int values_count) {
+VM *vm_create(uint8_t *code,
+        int code_count, 
+        int *globals, //globals
+        int nglobals, //num globals
+        lobj* values, //constants
+        int values_count //num constants
+    ) {
     VM* vm = calloc(1, (sizeof(VM)));
     vm->code = code;
     vm->code_count = code_count;
@@ -95,6 +107,8 @@ VM *vm_create(uint8_t *code, int code_count, int *globals, int nglobals, lobj* v
     vm->values = values;
     vm->values_count = values_count;
 
+
+    
     printf("VM SP INITIALIZED %d\n", vm->sp); 
     return vm;
 }
@@ -106,6 +120,17 @@ void vm_push(VM *vm, lobj value) {
 lobj vm_pop(VM *vm) {
     return vm->stack[--vm->sp];
 }
+
+void vm_add_frame(VM* vm, Context frame) {
+    if (vm->frame_count >= DEFAULT_CALL_STACK_SIZE) {
+        printf("Stack overflow\n");
+        exit(1);
+    }
+    
+    int index = vm->frame_count++;
+    vm->call_stack[index] = frame;
+}
+
 
 /* Create a new number type lval */
 lobj lobj_num(double x) {
@@ -133,7 +158,7 @@ typedef struct {
     int code_cap;
     int code_count;
 
-    lobj* values;    
+    lobj* values; 
     int values_count;
     int val_cap;
 } Compiler;
@@ -230,6 +255,7 @@ void lobj_print(lobj o) {
     break;
   }
 }
+
 /* Print an "lobj" followed by a newline */
 void lobj_println(lobj v) { lobj_print(v); putchar('\n'); }
 
@@ -273,24 +299,26 @@ void emit_code(mpc_ast_t* ast, Compiler* compiler) {
     }
 }
 
-Context* vm_context_init() {
-    Context* ctx = calloc(1,sizeof(Context));
-    return ctx;
+
+inline unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
+    return (chunk[location-1] << 8) | chunk[location];
 }
 
 void vm_exec(VM *vm, int start_ip, int flags) {
+
+
     // callstackp 
     int callstackp = 0;
     while (vm->pc < vm->code_count) {
         int instruction = vm->code[vm->pc];
         switch (instruction) {
-            case I_HALT:
+            case I_HALT: {
                 printf("HALTED: ");
                 for(int i = 0; i < vm->sp; i++) {
                     lobj_println(vm->stack[i]);
                 }
                 puts("");
-                return;
+            } return;
             case I_LOAD: {
                 int const_idx = vm->code[++vm->pc]; 
                 if(const_idx > vm ->values_count) {
@@ -299,7 +327,16 @@ void vm_exec(VM *vm, int start_ip, int flags) {
                 }
                 vm_push(vm, vm->values[const_idx]);
             } break;
-            case I_NEGATE:{} break;
+            case I_NEGATE:{
+                lobj a = vm_pop(vm);
+                if (a.type == LVAL_NUM) {
+                    lobj result = {LVAL_NUM, {.num = -a.v.num}};
+                    vm_push(vm, result);
+                } else {
+                    puts("typeerror");
+                    exit(1);
+                }
+            } break;
             case I_ADD: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
@@ -345,7 +382,7 @@ void vm_exec(VM *vm, int start_ip, int flags) {
             case I_MOD: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
-                    lobj result = {LVAL_NUM, {.num = a.v.num / b.v.num}};
+                    lobj result = {LVAL_NUM, {.num = (int)a.v.num % (int)b.v.num}};
                     vm_push(vm, result);
                 } else {
                     puts("typeerror");
