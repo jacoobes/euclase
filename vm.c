@@ -3,14 +3,15 @@
 #include <string.h>
 
 
-VM *vm_create(uint8_t *code,
+void vm_create(
+        VM* vm,
+        uint8_t *code,
         int code_count, 
         int *globals, //globals
         int nglobals, //num globals
         lobj* values, //constants
         int values_count //num constants
     ) {
-    VM* vm = calloc(1, (sizeof(VM)));
     vm->code = code;
     vm->code_count = code_count;
     vm->globals = globals;
@@ -18,39 +19,33 @@ VM *vm_create(uint8_t *code,
 
     vm->values = values;
     vm->values_count = values_count;
-
-
-    
+    vm->sp = 0;
+    vm->pc=0;
     printf("VM SP INITIALIZED %d\n", vm->sp); 
-    return vm;
 }
 
 
 void vm_push(VM *vm, lobj value) {
-    vm->stack[vm->sp++] = value;
+    vm->stack[++vm->sp] = value;
 }
 
 lobj vm_pop(VM *vm) {
-    return vm->stack[--vm->sp];
+    return vm->stack[vm->sp--];
 }
 
-void vm_add_frame(VM* vm, Context frame) {
+int vm_add_frame(VM* vm, Context frame) {
     if (vm->frame_count >= DEFAULT_CALL_STACK_SIZE) {
         printf("Stack overflow\n");
         exit(1);
     }
-    
     int index = vm->frame_count++;
     vm->call_stack[index] = frame;
+    return index;
 }
-
 
 /* Create a new number type lval */
 lobj lobj_num(double x) {
-  lobj obj;
-  obj.type = LVAL_NUM;
-  obj.v.num = x;
-  return obj;
+  return (lobj){.type=LVAL_NUM, .v.num = x };
 }
 
 /* Create a new error type lobj */
@@ -64,9 +59,7 @@ lobj lobj_err(int x) {
 
 
 
-Compiler* compiler_create() {
-    Compiler* compiler = malloc(sizeof(Compiler));
-    
+void compiler_create(Compiler* compiler) {
     compiler->values = malloc(sizeof(lobj) * 256);
     compiler->values_count = 0;
     compiler->val_cap = 256;
@@ -74,8 +67,11 @@ Compiler* compiler_create() {
     compiler->code = (uint8_t*)malloc(sizeof(uint8_t) * 1024);
     compiler->code_count = 0;
     compiler->code_cap = 1024;
-    return compiler;
+
+    compiler->local_count = 0;
+    compiler->scope_depth = 0;
 }
+
 
 void lobj_free(lobj* o) {
 
@@ -87,8 +83,6 @@ void lobj_free(lobj* o) {
     case LVAL_ERR:  break;
     case LVAL_SYM: break;
 
-    /* If Sexpr then delete all elements inside */
-    case LVAL_SEXPR: break;
   }
   /* Free the memory allocated for the "lval" struct itself */
   /* when we create heap objs this will be necessary*/
@@ -145,7 +139,7 @@ void lobj_print(lobj o) {
   switch (o.type) {
     /* In the case the type is a number print it */
     /* Then 'break' out of the switch. */
-    case LVAL_NUM: printf("%f", o.v.num); break;
+    case LVAL_NUM: printf("%.2f", o.v.num); break;
 
     /* In the case the type is an error */
     case LVAL_ERR:
@@ -160,25 +154,20 @@ void lobj_print(lobj o) {
 /* Print an "lobj" followed by a newline */
 void lobj_println(lobj v) { lobj_print(v); putchar('\n'); }
 
-
-
-
-inline unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
+unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
     return (chunk[location-1] << 8) | chunk[location];
 }
 
 void vm_exec(VM *vm, int start_ip, int flags) {
-
-
     // callstackp 
     int callstackp = 0;
     while (vm->pc < vm->code_count) {
         int instruction = vm->code[vm->pc];
         switch (instruction) {
             case I_HALT: {
-                printf("HALTED: ");
+                printf("HALTED:\n");
                 for(int i = 0; i < vm->sp; i++) {
-                    lobj_println(vm->stack[i]);
+                    printf("STACK %d", i);lobj_println(vm->stack[i]);
                 }
                 puts("");
             } return;
@@ -253,12 +242,29 @@ void vm_exec(VM *vm, int start_ip, int flags) {
                 }
             } break;
             case I_CALL: {
-                
-
+                vm->pc++;
+                vm->frame_count ++;
+                //TODO
             } break;
+            case I_JMP: {
+                vm->pc += 2;
+                unsigned short jump = parse_ushort(vm->code, vm->pc);
+                vm->pc += jump;
+            } break;
+            case I_GET_LOCAL: {
+                uint8_t slot = vm->code[++vm->pc];
+                printf("GET LOCAL %d ", slot); lobj_println(vm->stack[slot]);
+                vm_push(vm, vm->stack[slot]);
+            } break;
+            case I_SET_LOCAL: {
+                uint8_t slot = vm->code[++vm->pc];
+                printf("SET LOCAL %d,  ", slot); lobj_println(vm->stack[vm->sp]);
+                vm->stack[slot] = vm->stack[vm->sp];
+            } break;
+            case I_POP: vm_pop(vm);  break;
             default:
-                // Handle unknown instruction
-                break;
+                printf("Unknown opcode, misalignment?\n");
+                exit(1);
         }
         vm->pc++;  // Move to next instruction
     }

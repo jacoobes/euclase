@@ -28,9 +28,32 @@ void add_history(char* unused) {}
 #include <editline/readline.h>
 #include <editline/history.h>
 #endif//may need to use editline for mac linux repl
-
-
 #include "mpc.h"
+
+
+int add_local(Compiler* compiler, char* name) {
+    if (compiler->local_count == MAX_LOCALS) {
+        printf("Variable overflow. Reached maximum variables per scope (256)\n");
+        return -1;
+    }
+
+    // Check for existing variable with same name at current depth
+    for (int i = 0; i < compiler->local_count; i++) {
+        if (compiler->locals[i].depth == compiler->scope_depth 
+                && strcmp(compiler->locals[i].name.contents, name) == 0) {
+            return -1;
+        }
+    }
+    int prevcount = compiler->local_count;
+    // Add new local
+    compiler->locals[prevcount].depth = compiler->scope_depth;
+    compiler->locals[prevcount].name = (vm_string){ .len=strlen(name), .contents=name }; //probably make a wrapper function
+    compiler->local_count++;
+    return prevcount;
+}
+
+
+
 
 void emit_code(mpc_ast_t* ast, Compiler* compiler) { 
     if (strstr(ast->tag, "number")) {
@@ -101,22 +124,21 @@ int main(int argc, char** argv) {
         /* On Success Print the AST */
         mpc_ast_print(r.output);
         mpc_ast_t* a = r.output;
-        Compiler* compiler = compiler_create();
-        emit_code(a, compiler);
-        compiler_emit(compiler, I_HALT);
+        Compiler compiler;
+        compiler_create(&compiler);
+        emit_code(a, &compiler);
+        compiler_emit(&compiler, I_HALT);
 //      for(int i = 0; i < compiler->values_count; i++) {
 //          lobj_print(compiler->values[i]); printf(",");
 //      }
 
-        printf("code_count %d\n", compiler->code_count);
-        printf("values_count %d\n", compiler->values_count);
-        VM* vm = vm_create(compiler->code, compiler->code_count,
-                           NULL, 0,
-                           compiler->values, compiler->values_count);
+        printf("code_count %d\n", compiler.code_count);
+        printf("values_count %d\n", compiler.values_count);
+        VM vm;
+        vm_create(&vm, compiler.code, compiler.code_count,
+                    NULL, 0, compiler.values, compiler.values_count);
 
-        vm_exec(vm, 0, 0);
-        compiler_free(compiler);
-        free(vm);
+        vm_exec(&vm, 0, 0);
         //lobj_println(result);
         mpc_ast_delete(r.output);
     } else {
