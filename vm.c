@@ -161,6 +161,7 @@ unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
 void vm_exec(VM *vm, int start_ip, int flags) {
     // callstackp 
     int callstackp = 0;
+    Context* cur_frame = &vm->call_stack[vm->frame_count - 1]; // framecount will always have one
     while (vm->pc < vm->code_count) {
         int instruction = vm->code[vm->pc];
         switch (instruction) {
@@ -244,6 +245,7 @@ void vm_exec(VM *vm, int start_ip, int flags) {
             case I_CALL: {
                 vm->pc++;
                 vm->frame_count ++;
+                cur_frame = &vm->call_stack[vm->frame_count];
                 //TODO
             } break;
             case I_JMP: {

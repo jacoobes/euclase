@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include "./vm.h"
 
 /* If we are compiling on Windows compile these functions */
