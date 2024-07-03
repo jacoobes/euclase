@@ -33,13 +33,13 @@ lobj vm_pop(VM *vm) {
     return vm->stack[vm->sp--];
 }
 
-int vm_add_frame(VM* vm, Context frame) {
+int vm_add_frame(VM* vm, CallFrame* frame) {
     if (vm->frame_count >= DEFAULT_CALL_STACK_SIZE) {
         printf("Stack overflow\n");
         exit(1);
     }
     int index = vm->frame_count++;
-    vm->call_stack[index] = frame;
+    vm->call_stack[index] = *frame;
     return index;
 }
 
@@ -48,6 +48,11 @@ lobj lobj_num(double x) {
   return (lobj){.type=LVAL_NUM, .v.num = x };
 }
 
+lobj lobj_func() {
+    return (lobj){.type=LVAL_FUNC };
+}
+
+
 /* Create a new error type lobj */
 lobj lobj_err(int x) {
   lobj o;
@@ -55,7 +60,6 @@ lobj lobj_err(int x) {
   o.v.err = x;
   return o;
 }
-
 
 
 
@@ -82,7 +86,6 @@ void lobj_free(lobj* o) {
     /* For Err or Sym free the string data */
     case LVAL_ERR:  break;
     case LVAL_SYM: break;
-
   }
   /* Free the memory allocated for the "lval" struct itself */
   /* when we create heap objs this will be necessary*/
@@ -158,10 +161,15 @@ unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
     return (chunk[location-1] << 8) | chunk[location];
 }
 
+void run(VM* vm, vm_function* fn) {
+    CallFrame* frame = &vm->call_stack[vm->frame_count++];
+    frame->function = fn;
+    frame->locals = vm->stack;
+}
+
 void vm_exec(VM *vm, int start_ip, int flags) {
-    // callstackp 
-    int callstackp = 0;
-    Context* cur_frame = &vm->call_stack[vm->frame_count - 1]; // framecount will always have one
+    
+    CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; // framecount will always have one
     while (vm->pc < vm->code_count) {
         int instruction = vm->code[vm->pc];
         switch (instruction) {
@@ -243,10 +251,9 @@ void vm_exec(VM *vm, int start_ip, int flags) {
                 }
             } break;
             case I_CALL: {
-                vm->pc++;
+                int argc = vm->code[++vm->pc];
                 vm->frame_count ++;
-                cur_frame = &vm->call_stack[vm->frame_count];
-                //TODO
+                //TODO, implement funciton calling
             } break;
             case I_JMP: {
                 vm->pc += 2;
@@ -260,7 +267,10 @@ void vm_exec(VM *vm, int start_ip, int flags) {
             } break;
             case I_SET_LOCAL: {
                 uint8_t slot = vm->code[++vm->pc];
+
                 printf("SET LOCAL %d,  ", slot); lobj_println(vm->stack[vm->sp]);
+
+                //given a stack index, set the value on the stack at slot to where vm->sp is currently 
                 vm->stack[slot] = vm->stack[vm->sp];
             } break;
             case I_POP: vm_pop(vm);  break;

@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_STR };
+enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_STR, LVAL_FUNC };
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
 enum Instruction {
@@ -23,10 +23,13 @@ enum Instruction {
     I_SET_LOCAL   ,
     I_POP
 };
+typedef struct {
 
+} vm_object ;
 typedef union {
     double num;
     int err;
+    vm_object* obj;
 } Value;
 
 /* Declare New lval Struct */
@@ -36,9 +39,24 @@ typedef struct {
 } lobj; //lisp object
 
 typedef struct {
+  vm_object obj;
+  int arity;
+  uint8_t* chunk;
+  uint8_t chunk_ct;
+} vm_function;
+
+typedef struct {
+    vm_object obj;
+    char* contents; //must be null terminated
+    int len; 
+} vm_string;
+
+
+typedef struct {
     uint8_t returnip;
+    vm_function* function;
     lobj* locals; //the array of locals
-} Context;
+} CallFrame;
 
 
 
@@ -46,17 +64,6 @@ typedef struct {
 #define DEFAULT_NUM_LOCALS 10
 
 
-typedef struct {
-  //Obj obj;
-  int arity;
-  uint8_t* chunk;
-  uint8_t chunk_ct;
-} vm_function;
-
-typedef struct {
-    char* contents; //must be null terminated
-    int len; 
-} vm_string;
 
 typedef struct {
     uint8_t *code;
@@ -76,7 +83,7 @@ typedef struct {
 
     //stack pointer
     int sp;
-    Context call_stack[DEFAULT_CALL_STACK_SIZE];
+    CallFrame call_stack[DEFAULT_CALL_STACK_SIZE];
     int frame_count;
     
 } VM;
@@ -105,6 +112,7 @@ typedef struct {
 } Compiler;
 
 lobj lobj_num(double x);
+lobj lobj_func();
 lobj lobj_err(int err);
 void compiler_create(Compiler*);
 int  compiler_add_constant(Compiler*, lobj);

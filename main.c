@@ -83,6 +83,11 @@ void emit_code(mpc_ast_t* ast, Compiler* compiler) {
             compiler_emit(compiler, I_MOD);
         } 
     }
+    mpc_ast_t* exp = NULL;
+    printf("TAG VISITED %s\n", ast->tag);
+
+    if (strcmp(ast->tag, ">") == 0) { exp = *ast->children; } 
+    printf("contents of tag %s\n", exp->tag);
     /* Iterate s expression */
     for(int i = ast->children_num-1; i >= 0; i--) {
         if (strcmp(ast->children[i]->contents, "(") == 0) { continue; }
@@ -109,10 +114,10 @@ int main(int argc, char** argv) {
   mpca_lang(MPCA_LANG_DEFAULT,
     "                                                     \
         number   : /-?[0-9]+\\.?[0-9]*/ ;                 \
-        symbol   : '+' | '-' | '*' | '/' | '%';           \
+        symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;     \
         sexpr    : '(' <expr>* ')' ;                      \
         expr     : <number> | <symbol> | <sexpr>;         \
-        prog : /^/ <expr>* /$/ ;                       \
+        prog : /^/ <expr>* /$/ ;                          \
     ",
     Number, Symbol, Sexpr, Expr, Euclase);
   while(1) {
