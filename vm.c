@@ -20,7 +20,7 @@ void vm_create(
     vm->values = values;
     vm->values_count = values_count;
     vm->sp = 0;
-    vm->pc=0;
+    vm->ip = 0;
     printf("VM SP INITIALIZED %d\n", vm->sp); 
 }
 
@@ -164,14 +164,14 @@ unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
 void run(VM* vm, vm_function* fn) {
     CallFrame* frame = &vm->call_stack[vm->frame_count++];
     frame->function = fn;
-    frame->locals = vm->stack;
+    frame->slots = vm->stack;
 }
 
 void vm_exec(VM *vm, int start_ip, int flags) {
     
     CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; // framecount will always have one
-    while (vm->pc < vm->code_count) {
-        int instruction = vm->code[vm->pc];
+    while (vm->ip < vm->code_count) {
+        int instruction = vm->code[vm->ip];
         switch (instruction) {
             case I_HALT: {
                 printf("HALTED:\n");
@@ -181,12 +181,12 @@ void vm_exec(VM *vm, int start_ip, int flags) {
                 puts("");
             } return;
             case I_LOAD: {
-                int const_idx = vm->code[++vm->pc]; 
+                int const_idx = cur_frame->function->chunk[*(++cur_frame->ip)]; 
                 if(const_idx > vm ->values_count) {
                     puts("const idx exceeds value count");
                     exit(1);
                 }
-                vm_push(vm, vm->values[const_idx]);
+                vm_push(vm, cur_frame->slots[const_idx]);
             } break;
             case I_NEGATE:{
                 lobj a = vm_pop(vm);
@@ -219,7 +219,6 @@ void vm_exec(VM *vm, int start_ip, int flags) {
                     exit(1);
                 }
             } break;
-            
             case I_MUL: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
@@ -251,34 +250,32 @@ void vm_exec(VM *vm, int start_ip, int flags) {
                 }
             } break;
             case I_CALL: {
-                int argc = vm->code[++vm->pc];
+                int argc = vm->code[++vm->ip];
                 vm->frame_count ++;
                 //TODO, implement funciton calling
             } break;
             case I_JMP: {
-                vm->pc += 2;
-                unsigned short jump = parse_ushort(vm->code, vm->pc);
-                vm->pc += jump;
+                vm->ip += 2;
+                unsigned short jump = parse_ushort(vm->code, vm->ip);
+                vm->ip += jump;
             } break;
             case I_GET_LOCAL: {
-                uint8_t slot = vm->code[++vm->pc];
+                uint8_t slot = vm->code[++vm->ip];
                 printf("GET LOCAL %d ", slot); lobj_println(vm->stack[slot]);
-                vm_push(vm, vm->stack[slot]);
+                vm_push(vm, cur_frame->slots[slot]);
             } break;
             case I_SET_LOCAL: {
-                uint8_t slot = vm->code[++vm->pc];
-
+                uint8_t slot = vm->code[++vm->ip];
                 printf("SET LOCAL %d,  ", slot); lobj_println(vm->stack[vm->sp]);
-
                 //given a stack index, set the value on the stack at slot to where vm->sp is currently 
-                vm->stack[slot] = vm->stack[vm->sp];
+                cur_frame->slots[slot] = vm->stack[vm->sp];
             } break;
             case I_POP: vm_pop(vm);  break;
             default:
                 printf("Unknown opcode, misalignment?\n");
                 exit(1);
         }
-        vm->pc++;  // Move to next instruction
+        vm->ip++;  // Move to next instruction
     }
 
 }

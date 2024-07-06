@@ -17,7 +17,7 @@ int main() {
     VM vm;
     vm_create(&vm, code, sizeof(code),
               NULL, 0,
-               values, sizeof(values) / sizeof(lobj));
+              values, sizeof(values) / sizeof(lobj));
     
     vm_exec(&vm, 0, 0);
 

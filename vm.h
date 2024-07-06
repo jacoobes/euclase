@@ -47,15 +47,15 @@ typedef struct {
 
 typedef struct {
     vm_object obj;
-    char* contents; //must be null terminated
     int len; 
+    char* contents; //must be null terminated
 } vm_string;
 
 
 typedef struct {
-    uint8_t returnip;
+    uint8_t* ip;
     vm_function* function;
-    lobj* locals; //the array of locals
+    lobj* slots; //the array of locals
 } CallFrame;
 
 
@@ -73,7 +73,7 @@ typedef struct {
     int *globals;
     int nglobals;
     //program counter
-    int pc;
+    int ip;
 
     // Operand stack, grows upwards
     lobj stack[256];
