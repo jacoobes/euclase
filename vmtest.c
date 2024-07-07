@@ -12,10 +12,10 @@ int main() {
     lobj values[]={ lobj_num(1),
                     lobj_num(5), };
     VM vm;
+    lobj main = lobj_func( code, sizeof(code), values, sizeof(values) / sizeof(lobj));
     vm_create(&vm, 
               NULL, 0,
-              values, sizeof(values) / sizeof(lobj),
-              code, sizeof(code));
+              &main);
 
     vm_exec(&vm, 0);
     

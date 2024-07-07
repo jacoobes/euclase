@@ -4,31 +4,31 @@
 
 void vm_push(VM *vm, lobj value);
 
-void vm_create(
-        VM* vm,
-        int *globals, //globals
-        int nglobals, //num globals
-        lobj* values, //constants
-        int values_count, 
-        uint8_t* code, //beginning code
-        int code_ct
-    ) {
+void vm_create(VM* vm,
+               int *globals, //globals
+               int nglobals, //num globals
+               lobj* main) {
     vm->globals = globals;
     vm->nglobals = nglobals;
 
-    vm->values = values;
-    vm->values_count = values_count;
 
     vm->sp=0;
     vm->frame_count=0;
-
-    lobj main = lobj_func(code, code_ct);
-    vm_push(vm, main);
+    if(main->type != LVAL_OBJ) {
+        printf("Main lobj is not an object. needs to be a function");
+        exit(1);
+    }
+    if(main->v.obj->type != 1) {
+        printf("Main lobj is not a function");
+        exit(1);
+    }
+    vm_function* fn = (vm_function*)main->v.obj;
+    vm_push(vm, *main);
     //set the main funciton as first in the callstack
     vm->call_stack[0] = (CallFrame){
-        .ip=code,
+        .ip=fn->chunk,
         .slots=vm->stack, //values is pointer to first element in array. 
-        .function=(vm_function*)main.v.obj
+        .function=fn
     };
     vm->frame_count += 1;
 }
@@ -49,11 +49,13 @@ lobj lobj_num(double x) {
   return (lobj){.type=LVAL_NUM, .v.num = x };
 }
 
-lobj lobj_func(uint8_t* initial_code, uint8_t code_ct) {
+lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count) {
     vm_function* fn = malloc(sizeof(vm_function));
     fn->obj.type=1;
     fn->chunk=initial_code;
     fn->chunk_ct=code_ct;
+    fn->values=values;
+    fn->values_ct=values_count;
     return (lobj){
         .type=LVAL_OBJ,
         .v.obj=(vm_object*)fn
@@ -219,11 +221,11 @@ void vm_exec(VM *vm, int flags) {
             case I_LOAD: {
                 int const_idx = READ_BYTE(); 
                 printf("I_LOAD "); lobj_println(cur_frame->slots[const_idx]);
-                if(const_idx > vm ->values_count) {
+                if(const_idx > cur_frame->function->values_ct) {
                     puts("const idx exceeds value count");
                     exit(1);
                 }
-                vm_push(vm, vm->values[const_idx]);
+                vm_push(vm, cur_frame->function->values[const_idx]);
             } break;
             case I_NEGATE:{
                 lobj a = vm_pop(vm);

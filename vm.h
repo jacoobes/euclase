@@ -43,8 +43,13 @@ typedef struct {
 typedef struct {
   vm_object obj;
   int arity;
+
   uint8_t* chunk;
   uint8_t chunk_ct;
+
+  lobj* values;
+  int values_ct;
+
 } vm_function;
 
 typedef struct {
@@ -57,7 +62,7 @@ typedef struct {
 typedef struct {
     uint8_t* ip;
     vm_function* function;
-    lobj* slots; //the array of locals
+    lobj* slots; //the reference to the stack that the function can use
 } CallFrame;
 
 
@@ -75,9 +80,6 @@ typedef struct {
     // Operand stack, grows upwards
     lobj stack[256];
     
-    lobj* values;
-    int values_count;
-
     //stack pointer
     int sp;
     CallFrame call_stack[DEFAULT_CALL_STACK_SIZE];
@@ -92,7 +94,7 @@ typedef struct {
 } Local;
 
 typedef struct {
-    int const_count;
+
     uint8_t* code;
     int code_cap;
     int code_count;
@@ -109,7 +111,7 @@ typedef struct {
 } Compiler;
 
 lobj lobj_num(double x);
-lobj lobj_func(uint8_t* initial_code, uint8_t code_ct);
+lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count);
 lobj lobj_err(int err);
 void compiler_create(Compiler*);
 int  compiler_add_constant(Compiler*, lobj);
@@ -118,10 +120,7 @@ void compiler_free(Compiler*);
 void vm_create(VM* vm,
             int *globals, //globals
             int nglobals, //num globals
-            lobj* values, //constants
-            int values_count,
-            uint8_t* initial_code,
-            int code_ct); 
+            lobj* main); 
 
 void vm_exec(VM*, int);
 
