@@ -2,18 +2,17 @@
 #include "mpc.h"
 #include <string.h>
 
+void vm_push(VM *vm, lobj value);
 
 void vm_create(
         VM* vm,
-        uint8_t *code,
-        int code_count, 
         int *globals, //globals
         int nglobals, //num globals
         lobj* values, //constants
-        int values_count //num constants
+        int values_count, 
+        uint8_t* code,
+        int code_ct
     ) {
-    vm->code = code;
-    vm->code_count = code_count;
     vm->globals = globals;
     vm->nglobals = nglobals;
 
@@ -21,7 +20,17 @@ void vm_create(
     vm->values_count = values_count;
     vm->sp = 0;
     vm->ip = 0;
-    printf("VM SP INITIALIZED %d\n", vm->sp); 
+    vm->frame_count = 0;
+    printf("VM SP INITIALIZED %d\n", vm->sp);
+    lobj main = lobj_func(code, code_ct);
+    vm_push(vm, main);
+
+    vm->frame_count+= 1;
+    vm->call_stack[vm->frame_count] = (CallFrame){
+        .ip = code,
+        .slots=values, //values is pointer to first element in array. 
+        .function=(vm_function*)main.v.obj
+    };
 }
 
 
@@ -33,23 +42,21 @@ lobj vm_pop(VM *vm) {
     return vm->stack[vm->sp--];
 }
 
-int vm_add_frame(VM* vm, CallFrame* frame) {
-    if (vm->frame_count >= DEFAULT_CALL_STACK_SIZE) {
-        printf("Stack overflow\n");
-        exit(1);
-    }
-    int index = vm->frame_count++;
-    vm->call_stack[index] = *frame;
-    return index;
-}
 
 /* Create a new number type lval */
 lobj lobj_num(double x) {
   return (lobj){.type=LVAL_NUM, .v.num = x };
 }
 
-lobj lobj_func() {
-    return (lobj){.type=LVAL_FUNC };
+lobj lobj_func(uint8_t* initial_code, uint8_t code_ct) {
+    // FIX ME: initialize the function in vm obj
+    vm_function* fn = malloc(sizeof(vm_function));
+    fn->chunk_ct=code_ct;
+    fn->chunk=initial_code;
+    return (lobj){
+        .type=LVAL_OBJ,
+        .v.obj=(vm_object*)fn
+    };
 }
 
 
@@ -82,10 +89,18 @@ void lobj_free(lobj* o) {
   switch (o->type) {
     /* Do nothing special for number type */
     case LVAL_NUM: break;
-
     /* For Err or Sym free the string data */
     case LVAL_ERR:  break;
     case LVAL_SYM: break;
+    case LVAL_OBJ: {
+        int objty = o->v.obj->type;
+        switch(objty) {
+            case 0 : break;
+            case 1 : {
+                free(o->v.obj);
+            } break;
+        }
+    } break;
   }
   /* Free the memory allocated for the "lval" struct itself */
   /* when we create heap objs this will be necessary*/
@@ -167,12 +182,14 @@ void run(VM* vm, vm_function* fn) {
     frame->slots = vm->stack;
 }
 
-void vm_exec(VM *vm, int start_ip, int flags) {
-    
+void vm_exec(VM *vm, int flags) {
     CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; // framecount will always have one
-    while (vm->ip < vm->code_count) {
-        int instruction = vm->code[vm->ip];
-        switch (instruction) {
+
+    #define READ_BYTE(frame) *frame->ip++
+    
+    while (1) {
+        uint8_t instruction;
+        switch (instruction = READ_BYTE(cur_frame)) {
             case I_HALT: {
                 printf("HALTED:\n");
                 for(int i = 0; i < vm->sp; i++) {
@@ -275,7 +292,7 @@ void vm_exec(VM *vm, int start_ip, int flags) {
                 printf("Unknown opcode, misalignment?\n");
                 exit(1);
         }
-        vm->ip++;  // Move to next instruction
     }
+    #undef READ_BYTE
 
 }

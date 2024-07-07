@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_STR, LVAL_FUNC };
+enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_STR, LVAL_OBJ };
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
 enum Instruction {
@@ -23,9 +23,11 @@ enum Instruction {
     I_SET_LOCAL   ,
     I_POP
 };
-typedef struct {
 
-} vm_object ;
+typedef struct {
+   int type; // 0 = str, 1 = func, 2 = userdefined 
+} vm_object;
+
 typedef union {
     double num;
     int err;
@@ -112,19 +114,20 @@ typedef struct {
 } Compiler;
 
 lobj lobj_num(double x);
-lobj lobj_func();
+lobj lobj_func(uint8_t* initial_code, uint8_t code_ct);
 lobj lobj_err(int err);
 void compiler_create(Compiler*);
 int  compiler_add_constant(Compiler*, lobj);
 void compiler_emit(Compiler* c, uint8_t byte);
 void compiler_free(Compiler*);
 void vm_create(VM* vm,
-            uint8_t *code,
-            int code_count, 
             int *globals, //globals
             int nglobals, //num globals
             lobj* values, //constants
-            int values_count); 
+            int values_count,
+            uint8_t* initial_code,
+            int code_ct); 
 
-void vm_exec(VM*, int, int);
+void vm_exec(VM*, int);
+
 #endif
