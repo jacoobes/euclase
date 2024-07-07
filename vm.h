@@ -10,7 +10,7 @@ enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
 enum Instruction {
     I_HALT        , // End execution 
-    I_LOAD        , // I_LOAD
+    I_LOAD        , // Load value at index to stack.
     I_NEGATE      , // negate a number
     I_ADD         , // add two values
     I_SUB         , // subtract two numbers
@@ -68,14 +68,9 @@ typedef struct {
 
 
 typedef struct {
-    uint8_t *code;
-    int code_count;
-
     // global variable space
     int *globals;
     int nglobals;
-    //program counter
-    int ip;
 
     // Operand stack, grows upwards
     lobj stack[256];

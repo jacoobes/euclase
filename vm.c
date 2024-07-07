@@ -10,7 +10,7 @@ void vm_create(
         int nglobals, //num globals
         lobj* values, //constants
         int values_count, 
-        uint8_t* code,
+        uint8_t* code, //beginning code
         int code_ct
     ) {
     vm->globals = globals;
@@ -18,19 +18,19 @@ void vm_create(
 
     vm->values = values;
     vm->values_count = values_count;
+
     vm->sp = 0;
-    vm->ip = 0;
     vm->frame_count = 0;
-    printf("VM SP INITIALIZED %d\n", vm->sp);
+
     lobj main = lobj_func(code, code_ct);
     vm_push(vm, main);
-
-    vm->frame_count+= 1;
+    //set the main funciton as first in the callstack
     vm->call_stack[vm->frame_count] = (CallFrame){
-        .ip = code,
+        .ip=code,
         .slots=values, //values is pointer to first element in array. 
         .function=(vm_function*)main.v.obj
     };
+    vm->frame_count += 1;
 }
 
 
@@ -39,6 +39,7 @@ void vm_push(VM *vm, lobj value) {
 }
 
 lobj vm_pop(VM *vm) {
+    // get the element at top of stack.
     return vm->stack[vm->sp--];
 }
 
@@ -157,7 +158,7 @@ void lobj_print(lobj o) {
   switch (o.type) {
     /* In the case the type is a number print it */
     /* Then 'break' out of the switch. */
-    case LVAL_NUM: printf("%.2f", o.v.num); break;
+    case LVAL_NUM: printf("(num) %.2f", o.v.num); break;
 
     /* In the case the type is an error */
     case LVAL_ERR:
@@ -166,6 +167,17 @@ void lobj_print(lobj o) {
       if (o.v.err == LERR_BAD_OP)   { printf("Error: Invalid Operator!"); }
       if (o.v.err == LERR_BAD_NUM)  { printf("Error: Invalid Number!"); }
     break;
+
+    case LVAL_SYM: {
+        printf("sym");
+    } break;
+    case LVAL_OBJ: {
+        printf("obj");
+    } break;
+    default: {
+        printf("Unknown lobj to print");
+    }
+
   }
 }
 
@@ -176,29 +188,37 @@ unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
     return (chunk[location-1] << 8) | chunk[location];
 }
 
-void run(VM* vm, vm_function* fn) {
-    CallFrame* frame = &vm->call_stack[vm->frame_count++];
-    frame->function = fn;
-    frame->slots = vm->stack;
+static int apply(lobj obj, int argc) {
+    if(obj.type != LVAL_OBJ) {
+        puts("Object is not callable"); 
+        exit(1);
+    }
+    switch(obj.v.obj->type) {
+        case 1 : { 
+            
+           // todo 
+        }break;
+    }
+    return 0;
 }
 
 void vm_exec(VM *vm, int flags) {
-    CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; // framecount will always have one
-
-    #define READ_BYTE(frame) *frame->ip++
-    
+    // framecount will always have one
+    CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; 
+    #define READ_BYTE() *cur_frame->ip++
     while (1) {
         uint8_t instruction;
-        switch (instruction = READ_BYTE(cur_frame)) {
+        switch (instruction = READ_BYTE()) {
             case I_HALT: {
                 printf("HALTED:\n");
-                for(int i = 0; i < vm->sp; i++) {
-                    printf("STACK %d", i);lobj_println(vm->stack[i]);
+                for(int i = 1; i < vm->sp; i++) {
+                    printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
                 }
                 puts("");
             } return;
             case I_LOAD: {
-                int const_idx = cur_frame->function->chunk[*(++cur_frame->ip)]; 
+                int const_idx = READ_BYTE(); 
+                printf("I_LOAD "); lobj_println(cur_frame->slots[const_idx]);
                 if(const_idx > vm ->values_count) {
                     puts("const idx exceeds value count");
                     exit(1);
@@ -208,8 +228,7 @@ void vm_exec(VM *vm, int flags) {
             case I_NEGATE:{
                 lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM) {
-                    lobj result = {LVAL_NUM, {.num = -a.v.num}};
-                    vm_push(vm, result);
+                    vm_push(vm, (lobj){LVAL_NUM, {.num = -a.v.num}});
                 } else {
                     puts("typeerror");
                     exit(1);
@@ -218,8 +237,8 @@ void vm_exec(VM *vm, int flags) {
             case I_ADD: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
-                    lobj result = {LVAL_NUM, {.num = a.v.num + b.v.num}};
-                    printf("RESULT ADD:");lobj_println(result);
+                    lobj result = lobj_num(a.v.num + b.v.num);
+                    printf("RESULT ADD: ");lobj_println(result);
                     vm_push(vm, result);
                 } else {
                     puts("typeerror");
@@ -229,8 +248,7 @@ void vm_exec(VM *vm, int flags) {
             case I_SUB: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
-                    lobj result = {LVAL_NUM, {.num = a.v.num - b.v.num}};
-                    vm_push(vm, result);
+                    vm_push(vm, lobj_num(a.v.num - b.v.num));
                 } else {
                     puts("typeerror");
                     exit(1);
@@ -239,8 +257,7 @@ void vm_exec(VM *vm, int flags) {
             case I_MUL: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
-                    lobj result = {LVAL_NUM, {.num = a.v.num * b.v.num}};
-                    vm_push(vm, result);
+                    vm_push(vm, lobj_num(a.v.num * b.v.num));
                 } else {
                     puts("typeerror");
                     exit(1);
@@ -249,8 +266,7 @@ void vm_exec(VM *vm, int flags) {
             case I_DIV: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
-                    lobj result = {LVAL_NUM, {.num = a.v.num / b.v.num}};
-                    vm_push(vm, result);
+                    vm_push(vm, lobj_num(a.v.num / b.v.num));
                 } else {
                     puts("typeerror");
                     exit(1);
@@ -267,30 +283,38 @@ void vm_exec(VM *vm, int flags) {
                 }
             } break;
             case I_CALL: {
-                int argc = vm->code[++vm->ip];
-                vm->frame_count ++;
-                //TODO, implement funciton calling
+                uint8_t argc = READ_BYTE();
+                vm->frame_count++;
+                lobj val = vm_pop(vm);
+                int result = apply(val, argc);
+                if(result) { 
+                    cur_frame = &vm->call_stack[vm->frame_count - 1 ];
+                } else {
+                    printf("Call failed");
+                    exit(1);
+                }
             } break;
             case I_JMP: {
-                vm->ip += 2;
-                unsigned short jump = parse_ushort(vm->code, vm->ip);
-                vm->ip += jump;
+                cur_frame->ip += 2;
+                unsigned short jump = parse_ushort(cur_frame->ip, *cur_frame->ip);
+                cur_frame->ip += jump;
             } break;
             case I_GET_LOCAL: {
-                uint8_t slot = vm->code[++vm->ip];
+                uint8_t slot = READ_BYTE();
                 printf("GET LOCAL %d ", slot); lobj_println(vm->stack[slot]);
                 vm_push(vm, cur_frame->slots[slot]);
             } break;
             case I_SET_LOCAL: {
-                uint8_t slot = vm->code[++vm->ip];
-                printf("SET LOCAL %d,  ", slot); lobj_println(vm->stack[vm->sp]);
+                uint8_t slot = READ_BYTE();
+                printf("SET LOCAL %d  ", slot); lobj_println(vm->stack[vm->sp]);
                 //given a stack index, set the value on the stack at slot to where vm->sp is currently 
                 cur_frame->slots[slot] = vm->stack[vm->sp];
             } break;
             case I_POP: vm_pop(vm);  break;
-            default:
+            default: {
                 printf("Unknown opcode, misalignment?\n");
                 exit(1);
+            }
         }
     }
     #undef READ_BYTE

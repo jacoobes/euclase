@@ -139,10 +139,11 @@ int main(int argc, char** argv) {
         printf("code_count %d\n", compiler.code_count);
         printf("values_count %d\n", compiler.values_count);
         VM vm;
-        vm_create(&vm, compiler.code, compiler.code_count,
-                    NULL, 0, compiler.values, compiler.values_count);
+        vm_create(&vm, NULL, 0,
+                compiler.values, compiler.values_count,
+                compiler.code, compiler.code_count);
 
-        vm_exec(&vm, 0, 0);
+        vm_exec(&vm, 0);
         //lobj_println(result);
         mpc_ast_delete(r.output);
     } else {
