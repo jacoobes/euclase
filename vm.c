@@ -19,15 +19,15 @@ void vm_create(
     vm->values = values;
     vm->values_count = values_count;
 
-    vm->sp = 0;
-    vm->frame_count = 0;
+    vm->sp=0;
+    vm->frame_count=0;
 
     lobj main = lobj_func(code, code_ct);
     vm_push(vm, main);
     //set the main funciton as first in the callstack
-    vm->call_stack[vm->frame_count] = (CallFrame){
+    vm->call_stack[0] = (CallFrame){
         .ip=code,
-        .slots=values, //values is pointer to first element in array. 
+        .slots=vm->stack, //values is pointer to first element in array. 
         .function=(vm_function*)main.v.obj
     };
     vm->frame_count += 1;
@@ -50,10 +50,10 @@ lobj lobj_num(double x) {
 }
 
 lobj lobj_func(uint8_t* initial_code, uint8_t code_ct) {
-    // FIX ME: initialize the function in vm obj
     vm_function* fn = malloc(sizeof(vm_function));
-    fn->chunk_ct=code_ct;
+    fn->obj.type=1;
     fn->chunk=initial_code;
+    fn->chunk_ct=code_ct;
     return (lobj){
         .type=LVAL_OBJ,
         .v.obj=(vm_object*)fn
@@ -211,7 +211,7 @@ void vm_exec(VM *vm, int flags) {
         switch (instruction = READ_BYTE()) {
             case I_HALT: {
                 printf("HALTED:\n");
-                for(int i = 1; i < vm->sp; i++) {
+                for(int i = 0; i <= vm->sp; i++) {
                     printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
                 }
                 puts("");
@@ -223,7 +223,7 @@ void vm_exec(VM *vm, int flags) {
                     puts("const idx exceeds value count");
                     exit(1);
                 }
-                vm_push(vm, cur_frame->slots[const_idx]);
+                vm_push(vm, vm->values[const_idx]);
             } break;
             case I_NEGATE:{
                 lobj a = vm_pop(vm);
@@ -238,7 +238,8 @@ void vm_exec(VM *vm, int flags) {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
                     lobj result = lobj_num(a.v.num + b.v.num);
-                    printf("RESULT ADD: ");lobj_println(result);
+                    printf("ADD: "); lobj_println(result);
+                    printf("\tSET sp %d \n", vm->sp+1);
                     vm_push(vm, result);
                 } else {
                     puts("typeerror");
