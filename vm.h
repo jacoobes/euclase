@@ -113,6 +113,7 @@ typedef struct {
 lobj lobj_num(double x);
 lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count);
 lobj lobj_err(int err);
+void lobj_free(lobj*);
 void compiler_create(Compiler*);
 int  compiler_add_constant(Compiler*, lobj);
 void compiler_emit(Compiler* c, uint8_t byte);

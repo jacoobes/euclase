@@ -9,8 +9,8 @@ uint8_t code [] = {
 };
 
 int main() {
-    lobj values[]={ lobj_num(1),
-                    lobj_num(5), };
+    lobj values[]={lobj_num(1),
+                    lobj_num(5)};
     VM vm;
     lobj main = lobj_func( code, sizeof(code), values, sizeof(values) / sizeof(lobj));
     vm_create(&vm, 

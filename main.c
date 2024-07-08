@@ -51,7 +51,63 @@ int add_local(Compiler* compiler, char* name) {
     return prevcount;
 }
 
+void compiler_create(Compiler* compiler) {
+    compiler->values = malloc(sizeof(lobj) * 256);
+    compiler->values_count = 0;
+    compiler->val_cap = 256;
 
+    compiler->code = (uint8_t*)malloc(sizeof(uint8_t) * 1024);
+    compiler->code_count = 0;
+    compiler->code_cap = 1024;
+
+    compiler->local_count = 0;
+    compiler->scope_depth = 0;
+}
+
+void compiler_free(Compiler* c) {
+    if (c == NULL) return;
+    // Free the code array
+    if (c->code != NULL) {
+        free(c->code);
+    }
+
+    // Free the constants array
+    if (c->values != NULL) {
+        // If any constant contains dynamically allocated memory (like strings),
+        // we need to free that first
+        for (int i = 0; i < c->values_count ; i++) {
+            lobj_free(&c->values[i]);
+        }
+        free(c->values);
+    }
+    // Free the compiler struct itself
+    free(c);
+}
+
+int compiler_add_constant(Compiler* c, lobj constant) {
+//    for (int i = 0; i < c->constant_count; i++) {
+//        if (lobj_eq(&c->values[i], &constant)) {
+//            return i;  // Constant already exists
+//        }
+//    }
+    
+    if (c->values_count >= c->val_cap) {
+        c->val_cap *= 2;
+        c->values = realloc(c->values, sizeof(lobj) * c->val_cap);
+    }
+    
+    int index = c->values_count++;
+    c->values[index] = constant;
+    return index;
+}
+
+void compiler_emit(Compiler* c, uint8_t byte) {
+    if (c->code_count >= c->code_cap) {
+        c->code_cap *= 2;
+        c->code = realloc(c->code, sizeof(uint8_t) * c->code_cap);
+    }
+    c->code[c->code_count++] = byte;
+}
 
 
 void emit_code(mpc_ast_t* ast, Compiler* compiler) { 
@@ -132,16 +188,12 @@ int main(int argc, char** argv) {
         compiler_create(&compiler);
         emit_code(a, &compiler);
         compiler_emit(&compiler, I_HALT);
-//      for(int i = 0; i < compiler->values_count; i++) {
-//          lobj_print(compiler->values[i]); printf(",");
-//      }
 
         printf("code_count %d\n", compiler.code_count);
         printf("values_count %d\n", compiler.values_count);
         VM vm;
-        vm_create(&vm, NULL, 0,
-                compiler.values, compiler.values_count,
-                compiler.code, compiler.code_count);
+        lobj fn = lobj_func(compiler.code, compiler.code_count, compiler.values, compiler.values_count);
+        vm_create(&vm, NULL, 0, &fn);
 
         vm_exec(&vm, 0);
         //lobj_println(result);
