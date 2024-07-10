@@ -2,6 +2,7 @@
 #define vm_h
 
 #define MAX_LOCALS 256
+#define FRAMES_MAX 256
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +22,8 @@ enum Instruction {
     I_JMP         , // jmp to instr ptr
     I_GET_LOCAL   ,
     I_SET_LOCAL   ,
-    I_POP
+    I_POP,
+    I_RETURN
 };
 
 typedef struct {

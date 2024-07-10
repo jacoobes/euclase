@@ -2,6 +2,37 @@
 #include "mpc.h"
 #include <string.h>
 
+static int apply(VM* vm, lobj* obj, int argc) {
+    if(obj->type != LVAL_OBJ) {
+        puts("Object is not callable"); 
+        exit(1);
+    }
+    if(obj->v.obj->type != 1) {
+        puts("Can only call functions");
+        exit(1);
+    }
+    vm_function* fn = (vm_function*) obj->v.obj;
+    if(fn->arity != argc) {
+        puts("Invalid arity of function");
+        exit(1);
+    }
+
+    if (vm->frame_count == FRAMES_MAX) {
+        puts("stack overflow");
+        exit(1);
+    }
+    //top of call_stack is now the new function after being called
+    vm->call_stack[vm->frame_count] = (CallFrame){ 
+        .ip=fn->chunk,
+        .function=fn ,
+        .slots=vm->stack - argc - 1  
+    };
+
+    vm->frame_count += 1;
+    return 1;
+}
+
+
 void vm_push(VM *vm, lobj value);
 
 void vm_create(VM* vm,
@@ -14,23 +45,9 @@ void vm_create(VM* vm,
 
     vm->sp=0;
     vm->frame_count=0;
-    if(main->type != LVAL_OBJ) {
-        printf("Main lobj is not an object. needs to be a function");
-        exit(1);
-    }
-    if(main->v.obj->type != 1) {
-        printf("Main lobj is not a function");
-        exit(1);
-    }
-    vm_function* fn = (vm_function*)main->v.obj;
-    vm_push(vm, *main);
-    //set the main funciton as first in the callstack
-    vm->call_stack[0] = (CallFrame){
-        .ip=fn->chunk,
-        .slots=vm->stack, //values is pointer to first element in array. 
-        .function=fn
-    };
-    vm->frame_count += 1;
+
+
+    apply(vm, main, 0); 
 }
 
 
@@ -133,20 +150,6 @@ unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
     return (chunk[location-1] << 8) | chunk[location];
 }
 
-static int apply(lobj* obj, int argc) {
-    if(obj->type != LVAL_OBJ) {
-        puts("Object is not callable"); 
-        exit(1);
-    }
-    switch(obj->v.obj->type) {
-        case 1 : { 
-            
-           // todo 
-        }break;
-    }
-    return 0;
-}
-
 void vm_exec(VM *vm, int flags) {
     // framecount will always have one
     CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; 
@@ -234,7 +237,7 @@ void vm_exec(VM *vm, int flags) {
                 vm->frame_count++;
                 lobj maybe_callable = vm->stack[argc];
                 printf("About to call function\n");
-                if(!apply(&maybe_callable, argc)) { 
+                if(!apply(vm, &maybe_callable, argc)) { 
                     printf("Call failed");
                     exit(1);
                 } 
@@ -258,6 +261,16 @@ void vm_exec(VM *vm, int flags) {
                 cur_frame->slots[slot] = vm->stack[vm->sp];
             } break;
             case I_POP: vm_pop(vm);  break;
+            case I_RETURN: {
+                lobj value = vm_pop(vm);
+                vm->frame_count --;
+                if(vm->frame_count == 0) {
+                    vm_pop(vm);
+                    exit(0);
+                }
+                //vm->stack[vm->sp] = *cur_frame->slots;
+                
+            } break;
             default: {
                 printf("Unknown opcode, misalignment?\n");
                 exit(1);
