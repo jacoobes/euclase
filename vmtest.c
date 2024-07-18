@@ -24,6 +24,7 @@ int main() {
         I_CALL, 2,
         I_HALT
     };
+
     lobj main = lobj_func(main_code,
                          sizeof(main_code),
                          main_fn_values,

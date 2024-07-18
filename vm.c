@@ -260,7 +260,7 @@ void vm_exec(VM *vm, int flags) {
                 //given a stack index, set the value on the stack at slot to where vm->sp is currently 
                 cur_frame->slots[slot] = vm->stack[vm->sp];
             } break;
-            case I_POP: vm_pop(vm);  break;
+            case I_POP: { vm_pop(vm); }  break;
             case I_RETURN: {
                 lobj value = vm_pop(vm);
                 vm->frame_count --;
@@ -268,11 +268,14 @@ void vm_exec(VM *vm, int flags) {
                     vm_pop(vm);
                     exit(0);
                 }
-                //vm->stack[vm->sp] = *cur_frame->slots;
-                
+                // discard current call frame
+                vm->stack[vm->sp] = *cur_frame->slots;
+                // push to top of stack
+                vm_push(vm, value);
+                cur_frame = &vm->call_stack[vm->frame_count - 1];
             } break;
             default: {
-                printf("Unknown opcode, misalignment?\n");
+                puts("Unknown opcode, misalignment?");
                 exit(1);
             }
         }
