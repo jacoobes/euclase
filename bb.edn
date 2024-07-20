@@ -1,9 +1,9 @@
 {:paths ["scripts"]
  :min-bb-version "0.4.0"
  :tasks { compile-unix { :doc "- compiles-unix"
-                         :task (do (shell "gcc -std=c99 -Wall  vmtest.c mpc.c vm.c -ledit -o out" {:out :inherit })) } 
+                         :task (do (shell "gcc -g -std=c99 -Wall  vmtest.c mpc.c vm.c -ledit -o out" {:out :inherit })) } 
           compile-win {:doc "- compiles-win"
-                       :task (do (shell "gcc -g -std=c99 -Wall  vmtest.c mpc.c vm.c -o out" {:out :inherit })) }
+                       :task (do (shell "gcc -g -std=c99 -Wall vmtest.c mpc.c vm.c -o out" {:out :inherit })) }
          
          }
  }

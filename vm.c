@@ -27,7 +27,7 @@ static int apply(VM* vm, lobj* obj, int argc) {
         .function=fn,
         // slots is the constants on the stack which this callframe can use. 
         // we set it to the beginning of where we can use it
-        .slots=vm->stack + argc + 1
+        .slots=(&vm->stack[vm->sp]) - argc - 1
     };
     
     vm->frame_count += 1;
@@ -249,7 +249,7 @@ void vm_exec(VM *vm, int flags) {
                 uint8_t argc = READ_BYTE();
                 printf("argc %d\n", argc);
                 vm->frame_count++;
-                lobj maybe_callable = vm->stack[argc - vm->sp];
+                lobj maybe_callable = vm->stack[vm->sp-argc ];
                 printf("About to call function\n");
 //              for(int i = 1; i <= vm->sp; i++) {
 //                  printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
