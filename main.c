@@ -192,7 +192,7 @@ int main(int argc, char** argv) {
         printf("code_count %d\n", compiler.code_count);
         printf("values_count %d\n", compiler.values_count);
         VM vm;
-        lobj fn = lobj_func(compiler.code, compiler.code_count, compiler.values, compiler.values_count);
+        lobj fn = lobj_func(compiler.code, compiler.code_count, compiler.values, compiler.values_count, 0);
         vm_create(&vm, NULL, 0, &fn);
 
         vm_exec(&vm, 0);

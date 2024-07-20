@@ -24,10 +24,12 @@ static int apply(VM* vm, lobj* obj, int argc) {
     //top of call_stack is now the new function after being called
     vm->call_stack[vm->frame_count] = (CallFrame){ 
         .ip=fn->chunk,
-        .function=fn ,
-        .slots=vm->stack - argc - 1  
+        .function=fn,
+        // slots is the constants on the stack which this callframe can use. 
+        // we set it to the beginning of where we can use it
+        .slots=vm->stack + argc + 1
     };
-
+    
     vm->frame_count += 1;
     return 1;
 }
@@ -46,8 +48,10 @@ void vm_create(VM* vm,
     vm->sp=0;
     vm->frame_count=0;
 
-
-    apply(vm, main, 0); 
+    if(apply(vm, main, 0) != 1) {
+        printf("main fn failed");
+        exit(1);
+    }
 }
 
 
@@ -66,16 +70,20 @@ lobj lobj_num(double x) {
   return (lobj){.type=LVAL_NUM, .v.num = x };
 }
 
-lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count) {
+lobj lobj_func(uint8_t* initial_code,
+               uint8_t code_ct,
+               lobj* values,
+               int values_count,
+               uint8_t arity) {
+    //FIX ME: PROPERLY MANAGE MEMORY
     vm_function* fn = malloc(sizeof(vm_function));
 
     fn->obj.type=1;
-
     fn->chunk=initial_code;
     fn->chunk_ct=code_ct;
     fn->values=values;
     fn->values_ct=values_count;
-
+    fn->arity=arity;
     return (lobj){
         .type=LVAL_OBJ,
         .v.obj=(vm_object*)fn
@@ -134,7 +142,10 @@ void lobj_print(lobj o) {
         printf("sym");
     } break;
     case LVAL_OBJ: {
-        printf("obj");
+        switch(o.v.obj->type) {
+            case 1: printf("func(arity=%d)", ((vm_function*)o.v.obj)->arity); break;
+            default: printf("obj, yo no se");
+        }
     } break;
     default: {
         printf("Unknown lobj to print");
@@ -153,8 +164,10 @@ unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
 void vm_exec(VM *vm, int flags) {
     // framecount will always have one
     CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; 
+
     #define READ_BYTE() *cur_frame->ip++
     #define CONSTANT_AT(idx) cur_frame->function->values[idx]
+
     while (1) {
         uint8_t instruction;
         switch (instruction = READ_BYTE()) {
@@ -234,13 +247,18 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_CALL: {
                 uint8_t argc = READ_BYTE();
+                printf("argc %d\n", argc);
                 vm->frame_count++;
                 lobj maybe_callable = vm->stack[argc];
                 printf("About to call function\n");
+//              for(int i = 1; i <= vm->sp; i++) {
+//                  printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
+//              }
+                lobj_println(maybe_callable);
                 if(!apply(vm, &maybe_callable, argc)) { 
                     printf("Call failed");
                     exit(1);
-                } 
+                }
                 cur_frame = &vm->call_stack[vm->frame_count - 1];
                 
             } break;
@@ -263,7 +281,7 @@ void vm_exec(VM *vm, int flags) {
             case I_POP: { vm_pop(vm); }  break;
             case I_RETURN: {
                 lobj value = vm_pop(vm);
-                vm->frame_count --;
+                vm->frame_count--;
                 if(vm->frame_count == 0) {
                     vm_pop(vm);
                     exit(0);

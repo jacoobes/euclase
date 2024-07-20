@@ -51,7 +51,6 @@ typedef struct {
 
   lobj* values;
   int values_ct;
-
 } vm_function;
 
 typedef struct {
@@ -113,7 +112,7 @@ typedef struct {
 } Compiler;
 
 lobj lobj_num(double x);
-lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count);
+lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count, uint8_t arity);
 lobj lobj_err(int err);
 void lobj_free(lobj*);
 void compiler_create(Compiler*);
