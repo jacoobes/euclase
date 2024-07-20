@@ -249,7 +249,7 @@ void vm_exec(VM *vm, int flags) {
                 uint8_t argc = READ_BYTE();
                 printf("argc %d\n", argc);
                 vm->frame_count++;
-                lobj maybe_callable = vm->stack[argc];
+                lobj maybe_callable = vm->stack[argc - vm->sp];
                 printf("About to call function\n");
 //              for(int i = 1; i <= vm->sp; i++) {
 //                  printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
@@ -281,16 +281,24 @@ void vm_exec(VM *vm, int flags) {
             case I_POP: { vm_pop(vm); }  break;
             case I_RETURN: {
                 lobj value = vm_pop(vm);
+                printf("I_RETURN "); lobj_println(value);
                 vm->frame_count--;
+                printf("RETURN FRAME_COUNT CT %d\n", vm->frame_count);
                 if(vm->frame_count == 0) {
+                    printf("FRAME_COUNT IS 0, POPPING");
                     vm_pop(vm);
+                    printf("HALTED:\n");
+                    for(int i = 1; i <= vm->sp; i++) {
+                        printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
+                    }
+                    puts("");
                     exit(0);
                 }
-                // discard current call frame
-                vm->stack[vm->sp] = *cur_frame->slots;
+                printf("SP: %d\n", vm->sp);
+                printf("DISCARDED CURRENT CALL FRAME\n");
                 // push to top of stack
                 vm_push(vm, value);
-                cur_frame = &vm->call_stack[vm->frame_count - 1];
+                printf("PUSH TO TOP OF FRAME\n");
             } break;
             default: {
                 puts("Unknown opcode, misalignment?");

@@ -22,7 +22,7 @@ int main() {
     uint8_t main_code[] = {
         I_LOAD, 1,
         I_CALL, 2, // main is 0 slot, 
-        I_HALT
+        I_RETURN,
     };
 
     lobj main = lobj_func(main_code, sizeof(main_code),
