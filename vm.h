@@ -8,6 +8,7 @@
 #include <stdlib.h>
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_STR, LVAL_OBJ };
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
+enum { OBJ_STR, OBJ_FUNC, OBJ_USR };
 
 enum Instruction {
     I_HALT        , // End execution 
@@ -27,7 +28,7 @@ enum Instruction {
 };
 
 typedef struct {
-   int type; // 0 = str, 1 = func, 2 = userdefined 
+   int type; 
 } vm_object;
 
 typedef union {
@@ -51,6 +52,7 @@ typedef struct {
 
   lobj* values;
   int values_ct;
+  lobj name;
 } vm_function;
 
 typedef struct {
@@ -115,8 +117,9 @@ typedef struct {
 
 } Compiler;
 
+lobj lobj_str(char *, int len);
 lobj lobj_num(double x);
-lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count, uint8_t arity);
+lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count, uint8_t arity, lobj name);
 lobj lobj_err(int err);
 void lobj_free(lobj*);
 void compiler_create(Compiler*);

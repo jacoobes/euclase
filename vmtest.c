@@ -12,7 +12,7 @@ int main() {
     
     lobj add_fn_values[]={lobj_num(10)};
     lobj add = lobj_func(add_code, sizeof(add_code),
-            add_fn_values, sizeof(add_fn_values) / sizeof(lobj), add_arity);
+            add_fn_values, sizeof(add_fn_values) / sizeof(lobj), add_arity, lobj_str("add", 3));
     
     
     uint8_t main_arity = 0;
@@ -27,7 +27,7 @@ int main() {
     };
     lobj main = lobj_func(main_code, sizeof(main_code),
                           main_fn_values, sizeof(main_fn_values) / sizeof(lobj),
-                          main_arity);
+                          main_arity, lobj_str("__main__", 8));
 
     vm_create(&vm, 
               NULL, 0,

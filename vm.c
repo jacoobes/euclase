@@ -70,6 +70,24 @@ lobj vm_peek(VM* vm, int distance) {
     return vm->stack_top[-1 - distance];
 }
 
+lobj lobj_str(char * contents, int len) {
+    //FIX ME: PROPERLY MANAGE MEMORY
+    vm_string* s = malloc(sizeof(vm_string));
+    //FIX ME: PROPERLY MANAGE MEMORY
+    s->contents = malloc(len + 1);
+
+    strncpy(s->contents, contents, len);
+
+    s->contents[len] = '\0'; 
+    s->len = len;
+
+    s->obj.type=0;
+    return (lobj) {
+        .type=LVAL_OBJ,
+        .v.obj=(vm_object*)s
+    };
+}
+
 /* Create a new number type lval */
 lobj lobj_num(double x) {
   return (lobj){.type=LVAL_NUM, .v.num = x };
@@ -79,16 +97,19 @@ lobj lobj_func(uint8_t* initial_code,
                uint8_t code_ct,
                lobj* values,
                int values_count,
-               uint8_t arity) {
+               uint8_t arity,
+               lobj name) {
     //FIX ME: PROPERLY MANAGE MEMORY
     vm_function* fn = malloc(sizeof(vm_function));
 
-    fn->obj.type=1;
+    fn->obj.type=OBJ_FUNC;
+
     fn->chunk=initial_code;
     fn->chunk_ct=code_ct;
     fn->values=values;
     fn->values_ct=values_count;
     fn->arity=arity;
+    fn->name=name; 
     return (lobj){
         .type=LVAL_OBJ,
         .v.obj=(vm_object*)fn
@@ -148,7 +169,10 @@ void lobj_print(lobj o) {
     } break;
     case LVAL_OBJ: {
         switch(o.v.obj->type) {
-            case 1: printf("func(arity=%d)", ((vm_function*)o.v.obj)->arity); break;
+            case OBJ_FUNC: {
+                vm_function* fn = ((vm_function*)o.v.obj);
+                printf("func %s(arity=%d)", ((vm_string*)fn->name.v.obj)->contents, fn->arity);
+            }break;
             default: printf("obj, yo no se");
         }
     } break;
@@ -187,7 +211,9 @@ void vm_exec(VM *vm, int flags) {
             } return;
             case I_LOAD: {
                 int const_idx = READ_BYTE(); 
+#ifdef DEBUG
                 printf("I_LOAD "); lobj_println(CONSTANT_AT(const_idx));
+#endif
                 if(const_idx > cur_frame->function->values_ct) {
                     puts("const idx exceeds value count");
                     exit(1);
@@ -271,32 +297,34 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_GET_LOCAL: {
                 uint8_t slot = READ_BYTE();
-                printf("GET LOCAL %d ", slot); lobj_println(vm->stack[slot]);
                 vm_push(vm, cur_frame->slots[slot]);
+#ifdef DEBUG
+                printf("GET LOCAL %d ", slot); lobj_println(vm->stack[slot]);
+#endif
             } break;
             case I_SET_LOCAL: {
                 uint8_t slot = READ_BYTE();
                 lobj v  = vm_peek(vm, 0);
+#ifdef DEBUG
                 printf("SET LOCAL %d  ", slot); lobj_println(v);
-                //given a stack index, set the value on the stack at slot to where vm->sp is currently 
+#endif
+                //given a stack index, set the value on the stack at slot to where stack_top is currently 
                 cur_frame->slots[slot] = v;
             } break;
             case I_POP: { vm_pop(vm); }  break;
             case I_RETURN: {
                 lobj value = vm_pop(vm);
+#ifdef DEBUG
                 printf("I_RETURN "); lobj_println(value);
+#endif
                 vm->frame_count--;
-                printf("RETURN FRAME_COUNT CT %d\n", vm->frame_count);
                 if(vm->frame_count == 0) {
-                    printf("FRAME_COUNT IS 0, POPPING");
                     vm_pop(vm);
                     exit(0);
                 }
-                printf("DISCARDED CURRENT CALL FRAME\n");
                 // push to top of stack
                 vm->stack_top = cur_frame->slots;
                 vm_push(vm, value);
-                printf("PUSH TO TOP OF FRAME\n");
             } break;
             default: {
                 puts("Unknown opcode, misalignment?");
