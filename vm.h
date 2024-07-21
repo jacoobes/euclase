@@ -58,6 +58,7 @@ typedef struct {
 typedef struct {
     vm_object obj;
     int len; 
+    uint32_t hash;
     char* contents; //must be null terminated
 } vm_string;
 

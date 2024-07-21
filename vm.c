@@ -70,6 +70,15 @@ lobj vm_peek(VM* vm, int distance) {
     return vm->stack_top[-1 - distance];
 }
 
+uint32_t hash_str(char * contents, int len) {
+    uint32_t hash = 2166136261u;
+    for (int i = 0; i < len; i++) {
+        hash ^= (uint8_t)contents[i];
+        hash *= 16777619;
+    }
+    return hash;
+}
+
 lobj lobj_str(char * contents, int len) {
     //FIX ME: PROPERLY MANAGE MEMORY
     vm_string* s = malloc(sizeof(vm_string));
@@ -80,7 +89,7 @@ lobj lobj_str(char * contents, int len) {
 
     s->contents[len] = '\0'; 
     s->len = len;
-
+    s->hash= hash_str(contents, len);
     s->obj.type=0;
     return (lobj) {
         .type=LVAL_OBJ,
@@ -137,9 +146,14 @@ void lobj_free(lobj* o) {
     case LVAL_OBJ: {
         int objty = o->v.obj->type;
         switch(objty) {
-            case 0 : break;
-            case 1 : {
-                free(o->v.obj);
+            case OBJ_STR: { 
+                vm_string * fn=(vm_string*)o->v.obj;
+                free(fn);
+            }break;
+            case OBJ_FUNC : {
+                vm_function* fn=(vm_function*)o->v.obj;
+                free(fn->name.v.obj);
+                free(fn);
             } break;
         }
     } break;
@@ -279,10 +293,12 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_CALL: {
                 uint8_t argc = READ_BYTE();
-                printf("argc %d\n", argc);
                 vm->frame_count++;
                 lobj maybe_callable = vm_peek(vm, argc);
+#ifdef DEBUG
+                printf("argc %d\n", argc);
                 printf("About to call function "); lobj_println(maybe_callable);
+#endif
                 if(!apply(vm, &maybe_callable, argc)) { 
                     printf("Call failed");
                     exit(1);
