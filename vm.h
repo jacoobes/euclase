@@ -80,9 +80,13 @@ typedef struct {
 
     // Operand stack, grows upwards
     lobj stack[256];
+
+    //stack pointer. This points 1 PAST the top of the stack
+    //I remember it like this:
+    //stackTop points to where the next value to be pushed will go.
+    //The maximum number of values we can store on the stack (for now, at least) is 256
+    lobj* stack_top;
     
-    //stack pointer
-    int sp;
     CallFrame call_stack[DEFAULT_CALL_STACK_SIZE];
     int frame_count;
     

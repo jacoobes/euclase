@@ -27,7 +27,7 @@ static int apply(VM* vm, lobj* obj, int argc) {
         .function=fn,
         // slots is the constants on the stack which this callframe can use. 
         // we set it to the beginning of where we can use it
-        .slots=(&vm->stack[vm->sp]) - argc - 1
+        .slots=vm->stack_top - argc - 1 
     };
     
     vm->frame_count += 1;
@@ -35,8 +35,9 @@ static int apply(VM* vm, lobj* obj, int argc) {
 }
 
 
-void vm_push(VM *vm, lobj value);
-
+void reset_stack(VM* vm) {
+    vm->stack_top = vm->stack;
+}
 void vm_create(VM* vm,
                int *globals, //globals
                int nglobals, //num globals
@@ -44,8 +45,7 @@ void vm_create(VM* vm,
     vm->globals = globals;
     vm->nglobals = nglobals;
 
-
-    vm->sp=0;
+    reset_stack(vm);
     vm->frame_count=0;
 
     if(apply(vm, main, 0) != 1) {
@@ -56,14 +56,19 @@ void vm_create(VM* vm,
 
 
 void vm_push(VM *vm, lobj value) {
-    vm->stack[++vm->sp] = value;
+    *vm->stack_top = value;
+    vm->stack_top++;
 }
 
 lobj vm_pop(VM *vm) {
+    vm->stack_top--;
     // get the element at top of stack.
-    return vm->stack[vm->sp--];
+    return *vm->stack_top;
 }
 
+lobj vm_peek(VM* vm, int distance) {
+    return vm->stack_top[-1 - distance];
+}
 
 /* Create a new number type lval */
 lobj lobj_num(double x) {
@@ -161,8 +166,10 @@ unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
     return (chunk[location-1] << 8) | chunk[location];
 }
 
+
+
 void vm_exec(VM *vm, int flags) {
-    // framecount will always have one
+    // framecount will always have one, the main function
     CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; 
 
     #define READ_BYTE() *cur_frame->ip++
@@ -173,7 +180,7 @@ void vm_exec(VM *vm, int flags) {
         switch (instruction = READ_BYTE()) {
             case I_HALT: {
                 printf("HALTED:\n");
-                for(int i = 1; i <= vm->sp; i++) {
+                for(int i = 0; &vm->stack[i] != vm->stack_top; i++) {
                     printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
                 }
                 puts("");
@@ -201,7 +208,6 @@ void vm_exec(VM *vm, int flags) {
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
                     lobj result = lobj_num(a.v.num + b.v.num);
                     printf("ADD: "); lobj_println(result);
-                    printf("\tSET sp %d \n", vm->sp+1);
                     vm_push(vm, result);
                 } else {
                     puts("typeerror");
@@ -249,12 +255,8 @@ void vm_exec(VM *vm, int flags) {
                 uint8_t argc = READ_BYTE();
                 printf("argc %d\n", argc);
                 vm->frame_count++;
-                lobj maybe_callable = vm->stack[vm->sp-argc ];
-                printf("About to call function\n");
-//              for(int i = 1; i <= vm->sp; i++) {
-//                  printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
-//              }
-                lobj_println(maybe_callable);
+                lobj maybe_callable = vm_peek(vm, argc);
+                printf("About to call function "); lobj_println(maybe_callable);
                 if(!apply(vm, &maybe_callable, argc)) { 
                     printf("Call failed");
                     exit(1);
@@ -274,9 +276,10 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_SET_LOCAL: {
                 uint8_t slot = READ_BYTE();
-                printf("SET LOCAL %d  ", slot); lobj_println(vm->stack[vm->sp]);
+                lobj v  = vm_peek(vm, 0);
+                printf("SET LOCAL %d  ", slot); lobj_println(v);
                 //given a stack index, set the value on the stack at slot to where vm->sp is currently 
-                cur_frame->slots[slot] = vm->stack[vm->sp];
+                cur_frame->slots[slot] = v;
             } break;
             case I_POP: { vm_pop(vm); }  break;
             case I_RETURN: {
@@ -287,16 +290,11 @@ void vm_exec(VM *vm, int flags) {
                 if(vm->frame_count == 0) {
                     printf("FRAME_COUNT IS 0, POPPING");
                     vm_pop(vm);
-                    printf("HALTED:\n");
-                    for(int i = 1; i <= vm->sp; i++) {
-                        printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
-                    }
-                    puts("");
                     exit(0);
                 }
-                printf("SP: %d\n", vm->sp);
                 printf("DISCARDED CURRENT CALL FRAME\n");
                 // push to top of stack
+                vm->stack_top = cur_frame->slots;
                 vm_push(vm, value);
                 printf("PUSH TO TOP OF FRAME\n");
             } break;
