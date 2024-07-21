@@ -105,7 +105,7 @@ lobj lobj_func(uint8_t* initial_code,
     fn->obj.type=OBJ_FUNC;
 
     fn->chunk=initial_code;
-    fn->chunk_ct=code_ct;
+    fn->chunk_ct=sizeof(initial_code);
     fn->values=values;
     fn->values_ct=values_count;
     fn->arity=arity;

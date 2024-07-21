@@ -3,7 +3,7 @@
  :tasks { compile-unix { :doc "- compiles-unix"
                          :task (shell "gcc -g -std=c99 -Wall  vmtest.c mpc.c vm.c -ledit -o out" {:out :inherit }) } 
           compile-win {:doc "- compiles-win"
-                       :task (shell "gcc -g -std=c99 -Wall vmtest.c mpc.c vm.c -o out" {:out :inherit }) }
+                       :task (shell "gcc -g -std=c99 -Wall -DDEBUG vmtest.c mpc.c vm.c -o out" {:out :inherit }) }
          
          }
  }

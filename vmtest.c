@@ -10,9 +10,10 @@ int main() {
         I_RETURN
     };
     
-    lobj add_fn_values[]={lobj_num(10)};
+    lobj add_fn_values[]={};
     lobj add = lobj_func(add_code, sizeof(add_code),
-            add_fn_values, sizeof(add_fn_values) / sizeof(lobj), add_arity, lobj_str("add", 3));
+            add_fn_values, sizeof(add_fn_values) / sizeof(lobj),
+            add_arity, lobj_str("add", 3));
     
     
     uint8_t main_arity = 0;
