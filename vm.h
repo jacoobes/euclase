@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_STR, LVAL_OBJ };
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 enum { OBJ_STR, OBJ_FUNC, OBJ_USR };
