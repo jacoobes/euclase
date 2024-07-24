@@ -4,6 +4,10 @@
 #include "vm.h"
 
 
+#define MAX(x, y)           (((x) > (y)) ?  (x) : (y))
+#define ALLOCATE(ty, count) ((ty*)reallocate(NULL, 0, sizeof(ty) * (count)))
+
+
 // We don’t grow when the capacity is completely full.
 // Instead, we grow the array before then, when the array becomes at least 75% full.
 #define TABLE_MAX_LOAD 0.75

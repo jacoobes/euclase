@@ -1,0 +1,31 @@
+#include "./memory.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+void* reallocate (void* ptr, int old_size, int new_size) {
+    if(new_size == 0) {
+        free(ptr);
+        return NULL;
+    }
+    if(new_size > old_size) {
+        puts("illegal\n");
+        exit(1);
+    }
+    /*
+     * If the first argument is a null pointer, realloc() allocates a new memory block, behaving similarly to malloc().
+     * Otherwise, if the pointer argument does not point to a memory block allocated by malloc(), calloc(), or realloc(),
+     * or if it points to such a block that has since been released by a call to free() or realloc(), then the behavior is undefined.
+     */
+    void* result = realloc(ptr, new_size);
+    if (result == NULL) exit(1);
+    return result;
+}
+
+
+free_table_array() {
+
+
+}
+
+
+
