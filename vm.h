@@ -10,10 +10,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "./table.h"
 
-enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_STR, LVAL_OBJ };
-enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
-enum { OBJ_STR, OBJ_FUNC, OBJ_USR };
 
 enum Instruction {
     I_HALT        , // End execution 
@@ -32,41 +30,6 @@ enum Instruction {
     I_RETURN
 };
 
-typedef struct {
-   int type; 
-} vm_object;
-
-typedef union {
-    double num;
-    int err;
-    vm_object* obj;
-} Value;
-
-/* Declare New lval Struct */
-typedef struct {
-  int type;
-  Value v;
-} lobj; //lisp object
-
-typedef struct {
-  vm_object obj;
-  int arity;
-
-  uint8_t* chunk;
-  uint8_t chunk_ct;
-
-  lobj* values;
-  int values_ct;
-  lobj name;
-} vm_function;
-
-typedef struct {
-    vm_object obj;
-    int len; 
-    uint32_t hash;
-    char* contents; //must be null terminated
-} vm_string;
-
 
 typedef struct {
     uint8_t* ip;
@@ -83,7 +46,7 @@ typedef struct {
 
 typedef struct {
     // global variable space
-    int *globals;
+    HashTable* globals;
     int nglobals;
 
     // Operand stack, grows upwards
@@ -123,23 +86,10 @@ typedef struct {
 
 } Compiler;
 
-int IS_NUM(lobj l);
-int IS_OBJ(lobj l);
-
-lobj lobj_str(char *, int len);
-lobj lobj_num(double x);
-lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count, uint8_t arity, lobj name);
-lobj lobj_err(int err);
-void lobj_free(lobj*);
-void compiler_create(Compiler*);
-int  compiler_add_constant(Compiler*, lobj);
-void compiler_emit(Compiler* c, uint8_t byte);
-void compiler_free(Compiler*);
 void vm_create(VM* vm,
-            int *globals, //globals
-            int nglobals, //num globals
+            HashTable globals, //globals
             lobj* main); 
 
 void vm_exec(VM*, int);
-
+void vm_free(VM* vm);
 #endif

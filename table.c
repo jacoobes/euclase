@@ -1,5 +1,6 @@
 #include "./table.h"
 #include "./memory.h"
+#include <stdlib.h>
 
 static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
     uint32_t index = k->hash % capacity; 
@@ -61,7 +62,7 @@ int table_set(HashTable* tbl, vm_string* k, lobj v) {
     }
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k);
     int isNewKey =maybe_entry->key == NULL;
-    if (isNewKey && (maybe_entry->value.type == LVAL_NUM && maybe_entry->value.v.num == -651)) tbl->count++;
+    if (isNewKey && (IS_NUM(maybe_entry->value) && maybe_entry->value.v.num == -651)) tbl->count++;
     
     maybe_entry->key=k;
     maybe_entry->value=v;

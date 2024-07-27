@@ -1,5 +1,4 @@
 #include "./vm.h"
-#include "table.h"
 #include <stdint.h>
 
 
@@ -8,6 +7,8 @@ static uint8_t add_code [] = {
         I_ADD,
         I_RETURN
 };
+
+uint8_t main_arity = 0;
 static uint8_t main_code[] = {
         I_LOAD, 0, //we have to load 0 + 1
         I_LOAD, 1,
@@ -24,17 +25,15 @@ int main() {
             ADD_ARITY, lobj_str("add", 3));
     
     
-    uint8_t main_arity = 0;
     lobj main_fn_values[]={add, lobj_num(4), lobj_num(5)};
     VM vm;
     
     lobj main = lobj_func(main_code, sizeof(main_code),
                           main_fn_values, sizeof(main_fn_values) / sizeof(lobj),
                           main_arity, lobj_str("__main__", 8));
-
-    vm_create(&vm, 
-              NULL, 0,
-              &main);
+    //todo: init
+    HashTable globals;
+    vm_create(&vm, globals, &main);
     //apply main function
 
     //vm_exec(&vm, 0);

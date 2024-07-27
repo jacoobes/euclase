@@ -1,8 +1,7 @@
 #ifndef table_h
 #define table_h
 
-#include "vm.h"
-
+#include "lobj.h"
 
 #define MAX(x, y)           (((x) > (y)) ?  (x) : (y))
 #define ALLOCATE(ty, count) ((ty*)reallocate(NULL, 0, sizeof(ty) * (count)))

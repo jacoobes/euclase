@@ -1,6 +1,7 @@
 #include "./vm.h"
 #include "mpc.h"
 #include <string.h>
+#include "./lobj.h"
 
 int IS_NUM(lobj l){ return l.type == LVAL_NUM; }
 int IS_OBJ(lobj l){ return l.type == LVAL_OBJ; }
@@ -42,7 +43,7 @@ void reset_stack(VM* vm) {
     vm->stack_top = vm->stack;
 }
 void vm_create(VM* vm,
-               int *globals, //globals
+               HashTable* globals, //globals
                int nglobals, //num globals
                lobj* main) {
     vm->globals = globals;
@@ -73,141 +74,10 @@ lobj vm_peek(VM* vm, int distance) {
     return vm->stack_top[-1 - distance];
 }
 
-uint32_t hash_str(char * contents, int len) {
-    uint32_t hash = 2166136261u;
-    for (int i = 0; i < len; i++) {
-        hash ^= (uint8_t)contents[i];
-        hash *= 16777619;
-    }
-    return hash;
-}
-
-lobj lobj_str(char * contents, int len) {
-    //FIX ME: PROPERLY MANAGE MEMORY
-    vm_string* s = malloc(sizeof(vm_string));
-    //FIX ME: PROPERLY MANAGE MEMORY
-    s->contents = malloc(len + 1);
-    strncpy(s->contents, contents, len);
-    s->contents[len] = '\0'; 
-
-    s->len = len;
-    s->hash= hash_str(contents, len);
-    s->obj.type=OBJ_STR;
-    return (lobj) {
-        .type=LVAL_OBJ,
-        .v.obj=(vm_object*)s
-    };
-}
-
-/* Create a new number type lval */
-lobj lobj_num(double x) {
-  return (lobj){.type=LVAL_NUM, .v.num = x };
-}
-
-lobj lobj_func(uint8_t* initial_code,
-               uint8_t code_ct,
-               lobj* values,
-               int values_count,
-               uint8_t arity,
-               lobj name) {
-    //FIX ME: PROPERLY MANAGE MEMORY
-    vm_function* fn = malloc(sizeof(vm_function));
-
-    fn->obj.type=OBJ_FUNC;
-
-    fn->chunk=initial_code;
-    fn->chunk_ct=sizeof(initial_code);
-    fn->values=values;
-    fn->values_ct=values_count;
-    fn->arity=arity;
-    fn->name=name; 
-    return (lobj){
-        .type=LVAL_OBJ,
-        .v.obj=(vm_object*)fn
-    };
-}
-
-
-/* Create a new error type lobj */
-lobj lobj_err(int x) {
-  lobj o;
-  o.type = LVAL_ERR ;
-  o.v.err = x;
-  return o;
-}
-
-
-void lobj_free(lobj* o) {
-
-  switch (o->type) {
-    /* Do nothing special for number type */
-    case LVAL_NUM: break;
-    /* For Err or Sym free the string data */
-    case LVAL_ERR:  break;
-    case LVAL_SYM: break;
-    case LVAL_OBJ: {
-        int objty = o->v.obj->type;
-        switch(objty) {
-            case OBJ_STR: { 
-                vm_string * fn=(vm_string*)o->v.obj;
-                free(fn->contents);
-                free(fn);
-            }break;
-            case OBJ_FUNC : {
-                vm_function* fn=(vm_function*)o->v.obj;
-                free(fn->name.v.obj);
-                free(fn);
-            } break;
-        }
-    } break;
-  }
-  /* Free the memory allocated for the "lval" struct itself */
-  /* when we create heap objs this will be necessary*/
-  //free(o);
-}
-
-/* Print an "lobj" */
-void lobj_print(lobj o) {
-  switch (o.type) {
-    /* In the case the type is a number print it */
-    /* Then 'break' out of the switch. */
-    case LVAL_NUM: printf("(num) %.2f", o.v.num); break;
-
-    /* In the case the type is an error */
-    case LVAL_ERR:
-      /* Check what type of error it is and print it */
-      if (o.v.err == LERR_DIV_ZERO) { printf("Error: Division By Zero!"); }
-      if (o.v.err == LERR_BAD_OP)   { printf("Error: Invalid Operator!"); }
-      if (o.v.err == LERR_BAD_NUM)  { printf("Error: Invalid Number!"); }
-    break;
-
-    case LVAL_SYM: {
-        printf("sym");
-    } break;
-    case LVAL_OBJ: {
-        switch(o.v.obj->type) {
-            case OBJ_FUNC: {
-                vm_function* fn = ((vm_function*)o.v.obj);
-                printf("func %s(arity=%d)", ((vm_string*)fn->name.v.obj)->contents, fn->arity);
-            }break;
-            default: printf("obj, yo no se");
-        }
-    } break;
-    default: {
-        printf("Unknown lobj to print");
-    }
-
-  }
-}
-
-/* Print an "lobj" followed by a newline */
-void lobj_println(lobj v) { lobj_print(v); putchar('\n'); }
 
 unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
     return (chunk[location-1] << 8) | chunk[location];
 }
-
-
 
 void vm_exec(VM *vm, int flags) {
     // framecount will always have one, the main function
@@ -356,5 +226,6 @@ void vm_exec(VM *vm, int flags) {
 
 }
 
-
-
+void vm_free(VM* vm) {
+    
+}
