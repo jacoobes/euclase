@@ -20,12 +20,3 @@ void* reallocate (void* ptr, int old_size, int new_size) {
     if (result == NULL) exit(1);
     return result;
 }
-
-
-free_table_array() {
-
-
-}
-
-
-

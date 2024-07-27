@@ -2,6 +2,9 @@
 #include "mpc.h"
 #include <string.h>
 
+int IS_NUM(lobj l){ return l.type == LVAL_NUM; }
+int IS_OBJ(lobj l){ return l.type == LVAL_OBJ; }
+
 static int apply(VM* vm, lobj* obj, int argc) {
     if(obj->type != LVAL_OBJ) {
         puts("Object is not callable"); 
@@ -84,13 +87,12 @@ lobj lobj_str(char * contents, int len) {
     vm_string* s = malloc(sizeof(vm_string));
     //FIX ME: PROPERLY MANAGE MEMORY
     s->contents = malloc(len + 1);
-
     strncpy(s->contents, contents, len);
-
     s->contents[len] = '\0'; 
+
     s->len = len;
     s->hash= hash_str(contents, len);
-    s->obj.type=0;
+    s->obj.type=OBJ_STR;
     return (lobj) {
         .type=LVAL_OBJ,
         .v.obj=(vm_object*)s
@@ -148,6 +150,7 @@ void lobj_free(lobj* o) {
         switch(objty) {
             case OBJ_STR: { 
                 vm_string * fn=(vm_string*)o->v.obj;
+                free(fn->contents);
                 free(fn);
             }break;
             case OBJ_FUNC : {
@@ -352,3 +355,6 @@ void vm_exec(VM *vm, int flags) {
     #undef CONSTANT_AT
 
 }
+
+
+

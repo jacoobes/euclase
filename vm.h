@@ -3,6 +3,10 @@
 
 #define MAX_LOCALS 256
 #define FRAMES_MAX 256
+
+#define TRUE 1
+#define FALSE 0
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -118,6 +122,9 @@ typedef struct {
     int local_count; 
 
 } Compiler;
+
+int IS_NUM(lobj l);
+int IS_OBJ(lobj l);
 
 lobj lobj_str(char *, int len);
 lobj lobj_num(double x);
