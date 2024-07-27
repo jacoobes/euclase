@@ -1,6 +1,7 @@
 #include "./table.h"
 #include "./memory.h"
 #include <stdlib.h>
+#include <string.h>
 
 static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
     uint32_t index = k->hash % capacity; 
@@ -41,13 +42,8 @@ static void adjust_capacity (HashTable* tbl, int capacity) {
         dest->value = old_entry->value;
         tbl->count++;
     }
-
-    for(int i =0;i<tbl->capacity;i++) {
-        TableEntry* entr = &tbl->entries[i];
-        free(entr->key->contents);
-        free(entr->key);
-        lobj_free(&entr->value);
-    }
+    
+    free(tbl->entries);
     tbl->entries=new_entries;
     tbl->capacity=capacity;
 }
@@ -93,4 +89,22 @@ void table_create(HashTable* tbl) {
     tbl->entries=malloc(sizeof(lobj) * tbl->capacity);
 }
 
+vm_string* table_find_string(HashTable* table, const char* chars,
+                           int length, uint32_t hash) {
+  if (table->count == 0) return NULL;
 
+  uint32_t index = hash % table->capacity;
+  for (;;) {
+    TableEntry* entry = &table->entries[index];
+    if (entry->key == NULL) {
+      // Stop if we find an empty non-tombstone entry.
+      // todo: if (IS_NIL(entry->value)) return NULL;
+    } else if (entry->key->len== length &&
+        entry->key->hash == hash &&
+        memcmp(entry->key->contents, chars, length) == 0) {
+      // We found it.
+      return entry->key;
+    }
+    index = (index + 1) % table->capacity;
+  }
+}

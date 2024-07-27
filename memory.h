@@ -2,7 +2,7 @@
 #define memoryy_h
 
 
-void* reallocate (void* ptr, int old_size, int new_size); 
+void* reallocate (void* ptr, size_t old_size, size_t new_size); 
 
 
 #endif

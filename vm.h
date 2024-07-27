@@ -24,6 +24,7 @@ enum Instruction {
     I_MOD         , // modulus two numbers
     I_CALL        , // call function
     I_JMP         , // jmp to instr ptr
+    I_JMP_FALSY   , // jmp if falsy
     I_GET_LOCAL   ,
     I_SET_LOCAL   ,
     I_POP,
@@ -46,9 +47,8 @@ typedef struct {
 
 typedef struct {
     // global variable space
-    HashTable* globals;
-    int nglobals;
-
+    HashTable globals;
+    HashTable strings;
     // Operand stack, grows upwards
     lobj stack[256];
 
@@ -86,10 +86,7 @@ typedef struct {
 
 } Compiler;
 
-void vm_create(VM* vm,
-            HashTable globals, //globals
-            lobj* main); 
-
+void vm_create(VM* vm, lobj* main); 
 void vm_exec(VM*, int);
 void vm_free(VM* vm);
 #endif

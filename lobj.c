@@ -68,7 +68,6 @@ lobj lobj_err(int x) {
 
 
 void lobj_free(lobj* o) {
-
   switch (o->type) {
     /* Do nothing special for number type */
     case LVAL_NUM: break;

@@ -42,16 +42,11 @@ static int apply(VM* vm, lobj* obj, int argc) {
 void reset_stack(VM* vm) {
     vm->stack_top = vm->stack;
 }
-void vm_create(VM* vm,
-               HashTable* globals, //globals
-               int nglobals, //num globals
-               lobj* main) {
-    vm->globals = globals;
-    vm->nglobals = nglobals;
-
+void vm_create(VM* vm, lobj* main) {
     reset_stack(vm);
     vm->frame_count=0;
-
+    table_create(&vm->globals);
+    table_create(&vm->strings);
     if(apply(vm, main, 0) != 1) {
         printf("main fn failed");
         exit(1);
@@ -180,9 +175,19 @@ void vm_exec(VM *vm, int flags) {
                 
             } break;
             case I_JMP: {
-                cur_frame->ip += 2;
+                //advance current frame's instruction pointer by two bytes (uint16_t)
+                cur_frame->ip += 2; 
                 unsigned short jump = parse_ushort(cur_frame->ip, *cur_frame->ip);
+                //after parsing the jump, we advance the instruction pointer by that
                 cur_frame->ip += jump;
+            } break;
+            case I_JMP_FALSY: {
+                lobj lval = vm_pop(vm);
+                if(IS_NUM(lval) && !lval.v.num) {
+                    cur_frame->ip += 2; 
+                    unsigned short jump = parse_ushort(cur_frame->ip, *cur_frame->ip);
+                    cur_frame->ip += jump;
+                }
             } break;
             case I_GET_LOCAL: {
                 uint8_t slot = READ_BYTE();
@@ -227,5 +232,6 @@ void vm_exec(VM *vm, int flags) {
 }
 
 void vm_free(VM* vm) {
-    
+    printf("IMPL ME\n");
+    exit(1);    
 }
