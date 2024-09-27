@@ -51,7 +51,6 @@ void vm_create(VM* vm, lobj* main) {
         printf("main fn failed");
         exit(1);
     }
-    printf("Ok");
 }
 
 void vm_push(VM *vm, lobj value) {
@@ -113,7 +112,7 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_ADD: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
-                if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
+                if (IS_NUM(a) && IS_NUM(b)) {
                     lobj result = lobj_num(a.v.num + b.v.num);
                     printf("ADD: "); lobj_println(&result);
                     vm_push(vm, result);
@@ -124,7 +123,7 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_SUB: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
-                if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
+                if (IS_NUM(a) && IS_NUM(b)) {
                     vm_push(vm, lobj_num(a.v.num - b.v.num));
                 } else {
                     puts("typeerror");
@@ -133,7 +132,8 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_MUL: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
-                if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
+                if (IS_NUM(a) && IS_NUM(b)) {
+
                     vm_push(vm, lobj_num(a.v.num * b.v.num));
                 } else {
                     puts("typeerror");
@@ -142,8 +142,8 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_DIV: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
-                if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
-                    vm_push(vm, lobj_num(a.v.num / b.v.num));
+                if (IS_NUM(a) && IS_NUM(b)) {
+                    vm_push(vm, lobj_num(AS_NUM(a) / AS_NUM(b)));
                 } else {
                     puts("typeerror");
                     exit(1);
@@ -151,7 +151,7 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_MOD: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
-                if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
+                if (IS_NUM(a) && IS_NUM(b)) {
                     lobj result = {LVAL_NUM, {.num = (int)a.v.num % (int)b.v.num}};
                     vm_push(vm, result);
                 } else {

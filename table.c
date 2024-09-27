@@ -12,7 +12,7 @@ static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
     for(;;) {
         TableEntry* entry = &entries[index]; 
         if(entry->key == NULL) {
-            if (entry->value.type == LVAL_NUM && entry->value.v.num == -651) {
+            if (entry->value.type == LVAL_NUM && AS_NUM(entry->value)== -651) {
                 // Empty entry.
                 return tombstone != NULL ? tombstone : entry;
             } else {
@@ -70,7 +70,7 @@ int table_set(HashTable* tbl, vm_string* k, lobj v) {
     
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k);
     int isNewKey =maybe_entry->key == NULL;
-    if (isNewKey && (IS_NUM(maybe_entry->value) && maybe_entry->value.v.num == -651)) tbl->count++;
+    if (isNewKey && (IS_NUM(maybe_entry->value) && AS_NUM(maybe_entry->value) == -651)) tbl->count++;
     
     maybe_entry->key=k;
     maybe_entry->value=v;
