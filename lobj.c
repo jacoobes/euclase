@@ -12,15 +12,17 @@ uint32_t hash_str(char * contents, int len) {
     return hash;
 }
 
-lobj lobj_str(char* contents, int len) {
+// NOTE: contents MUST BE NULL TERMINATED
+lobj lobj_str(char* contents) {
+    int lencontents = strlen(contents);
     //FIX ME: PROPERLY MANAGE MEMORY
     vm_string* s = malloc(sizeof(vm_string));
     //FIX ME: PROPERLY MANAGE MEMORY
-    s->contents = malloc(len + 1);
-    strncpy(s->contents, contents, len);
-    s->contents[len] = '\0'; 
-    s->len = len;
-    s->hash= hash_str(contents, len);
+    s->contents = malloc(lencontents + 1);
+    strncpy(s->contents, contents, lencontents);
+    s->contents[lencontents] = '\0'; 
+    s->len = lencontents;
+    s->hash= hash_str(contents, lencontents);
     s->obj.type=OBJ_STR;
     return (lobj) {
         .type=LVAL_OBJ,
@@ -32,6 +34,7 @@ lobj lobj_str(char* contents, int len) {
 lobj lobj_num(double x) {
   return (lobj){.type=LVAL_NUM, .v.num = x };
 }
+
 lobj lobj_func(uint8_t* initial_code,
                uint8_t code_ct,
                lobj* values,
@@ -123,6 +126,7 @@ void lobj_print(lobj o) {
         }
     } break;
     default: {
+        printf("type: %d\n", o.type);
         printf("Unknown lobj to print");
     }
   }

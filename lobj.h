@@ -52,7 +52,7 @@ typedef struct {
 
 #define AS_STR(obj_) ((vm_string*)(obj_).v.obj)
 
-lobj lobj_str(char *, int len);
+lobj lobj_str(char *);
 lobj lobj_num(double x);
 lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count, uint8_t arity, lobj name);
 lobj lobj_err(int err);

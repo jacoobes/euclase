@@ -12,7 +12,7 @@ static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
     for(;;) {
         TableEntry* entry = &entries[index]; 
         if(entry->key == NULL) {
-            if (entry->value.type == LVAL_NUM && entry->value.v.num == 0) {
+            if (entry->value.type == LVAL_NUM && entry->value.v.num == -651) {
                 // Empty entry.
                 return tombstone != NULL ? tombstone : entry;
             } else {
@@ -31,21 +31,26 @@ static void adjust_capacity (HashTable* tbl, int capacity) {
     TableEntry* new_entries = ALLOCATE(TableEntry, capacity);
     for(int i = 0; i < capacity; i++) {
         new_entries[i].key = NULL;
-        new_entries[i].value = lobj_num(0);
+        new_entries[i].value = lobj_num(-651);
     }
     tbl->count = 0;
-    for(int i = 0; i < capacity; i++) {
-        TableEntry* old_entry = &tbl->entries[i];
-        if (old_entry->key == NULL) {
-            continue;
+    if (tbl->entries) {
+        for(int i = 0; i < capacity; i++) {
+            TableEntry* old_entry = &tbl->entries[i];
+            if (old_entry->key == NULL) {
+                continue;
+            }
+            TableEntry* dest = find_entry(new_entries, capacity, old_entry->key);
+            dest->key = old_entry->key;
+            dest->value = old_entry->value;
+            tbl->count++;
+#if DEBUG
+            printf("old entry moved to new entry in hash table\n");
+#endif
+
         }
-        TableEntry* dest = find_entry(new_entries, capacity, old_entry->key);
-        dest->key = old_entry->key;
-        dest->value = old_entry->value;
-        tbl->count++;
+        free(tbl->entries);
     }
-    
-    free(tbl->entries);
     tbl->entries=new_entries;
     tbl->capacity=capacity;
 }
@@ -57,6 +62,7 @@ int table_set(HashTable* tbl, vm_string* k, lobj v) {
         int new_cap = MAX(11, tbl->capacity*2);
 #if DEBUG
         printf("Adjusting capacity\n");
+        printf("%d\n", new_cap);
 #endif
         adjust_capacity(tbl, new_cap);
         //realloc ruins our bucket locations. we need to resize and put items in the right spots.
@@ -91,8 +97,8 @@ int table_delete(HashTable* tbl, vm_string* k) {
 void table_create(HashTable* tbl) {
     tbl->count = 0;
     //using java's default initial cap
-    tbl->capacity=11; 
-    tbl->entries=malloc(sizeof(TableEntry) * tbl->capacity);
+    tbl->capacity=0; 
+    tbl->entries=NULL;
 }
 
 vm_string* table_find_string(HashTable* table, const char* chars,

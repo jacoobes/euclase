@@ -47,17 +47,12 @@ void vm_create(VM* vm, lobj* main) {
     vm->frame_count=0;
     table_create(&vm->globals);
     table_create(&vm->strings);
-    lobj s = lobj_str("abc", 3);
-    vm_string* str = AS_STR(s);
-    table_set(&vm->globals, str, lobj_num(5));
+    table_set(&vm->globals, AS_STR(s), lobj_num(5));
     if(apply(vm, main, 0) != 1) {
         printf("main fn failed");
-
         exit(1);
     }
     lobj v;
-    table_get(&vm->globals, str, &v);
-    printf("abc = ");
     lobj_println(v);
     printf("Ok");
 }

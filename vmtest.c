@@ -22,7 +22,7 @@ int main() {
     lobj add_fn_values[1];
     lobj add = lobj_func(add_code, sizeof(add_code),
             add_fn_values, sizeof(add_fn_values) / sizeof(lobj),
-            ADD_ARITY, lobj_str("add", 3));
+            ADD_ARITY, lobj_str("add"));
     
     
     lobj main_fn_values[]={add, lobj_num(4), lobj_num(5)};
@@ -30,7 +30,7 @@ int main() {
     
     lobj main = lobj_func(main_code, sizeof(main_code),
                           main_fn_values, sizeof(main_fn_values) / sizeof(lobj),
-                          main_arity, lobj_str("__main__", 8));
+                          main_arity, lobj_str("__main__"));
     //todo: init
     //apply main function
     
