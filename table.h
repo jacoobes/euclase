@@ -3,7 +3,6 @@
 
 #include "lobj.h"
 #define MAX(x, y)           (((x) > (y)) ?  (x) : (y))
-#define ALLOCATE(ty, count) ((ty*)reallocate(NULL, 0, sizeof(ty) * (count)))
 
 
 // We don’t grow when the capacity is completely full.

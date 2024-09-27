@@ -9,4 +9,8 @@ void* reallocate (void* ptr, size_t old_size, size_t new_size);
 #define FREE_ARRAY(type, pointer, oldCount) \
     reallocate(pointer, sizeof(type) * (oldCount), 0)
 
+// MALLOC with casting
+#define ALLOCATE(ty, count) \
+    ((ty*)reallocate(NULL, 0, sizeof(ty) * (count)))
+
 #endif

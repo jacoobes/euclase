@@ -35,7 +35,7 @@ int main() {
     //apply main function
     
     vm_create(&vm, &main);
-    //vm_exec(&vm, 0);
+    vm_exec(&vm, 0);
     return 0;
 
 }

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "./vm.h"
+#include "lobj.h"
 
 /* If we are compiling on Windows compile these functions */
 #ifdef _WIN32
@@ -192,7 +193,7 @@ int main(int argc, char** argv) {
         printf("code_count %d\n", compiler.code_count);
         printf("values_count %d\n", compiler.values_count);
         VM vm;
-        lobj fn = lobj_func(compiler.code, compiler.code_count, compiler.values, compiler.values_count, 0);
+        lobj fn = lobj_func(compiler.code, compiler.code_count, compiler.values, compiler.values_count, 0, lobj_str("__main__"));
         vm_create(&vm, &fn);
 
         vm_exec(&vm, 0);

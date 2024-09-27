@@ -47,13 +47,10 @@ void vm_create(VM* vm, lobj* main) {
     vm->frame_count=0;
     table_create(&vm->globals);
     table_create(&vm->strings);
-    table_set(&vm->globals, AS_STR(s), lobj_num(5));
     if(apply(vm, main, 0) != 1) {
         printf("main fn failed");
         exit(1);
     }
-    lobj v;
-    lobj_println(v);
     printf("Ok");
 }
 
@@ -90,14 +87,14 @@ void vm_exec(VM *vm, int flags) {
             case I_HALT: {
                 printf("HALTED:\n");
                 for(int i = 0; &vm->stack[i] != vm->stack_top; i++) {
-                    printf("\tSTACK %d ", i); lobj_println(vm->stack[i]);
+                    printf("\tSTACK %d ", i); lobj_println(&vm->stack[i]);
                 }
                 puts("");
             } return;
             case I_LOAD: {
                 int const_idx = READ_BYTE(); 
 #ifdef DEBUG
-                printf("I_LOAD "); lobj_println(CONSTANT_AT(const_idx));
+                printf("I_LOAD "); lobj_println(&CONSTANT_AT(const_idx));
 #endif
                 if(const_idx > cur_frame->function->values_ct) {
                     puts("const idx exceeds value count");
@@ -118,7 +115,7 @@ void vm_exec(VM *vm, int flags) {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM && b.type == LVAL_NUM) {
                     lobj result = lobj_num(a.v.num + b.v.num);
-                    printf("ADD: "); lobj_println(result);
+                    printf("ADD: "); lobj_println(&result);
                     vm_push(vm, result);
                 } else {
                     puts("typeerror");
@@ -168,7 +165,7 @@ void vm_exec(VM *vm, int flags) {
                 lobj maybe_callable = vm_peek(vm, argc);
 #ifdef DEBUG
                 printf("argc %d\n", argc);
-                printf("About to call function "); lobj_println(maybe_callable);
+                printf("About to call function "); lobj_println(&maybe_callable);
 #endif
                 if(!apply(vm, &maybe_callable, argc)) { 
                     printf("Call failed");
@@ -196,14 +193,14 @@ void vm_exec(VM *vm, int flags) {
                 uint8_t slot = READ_BYTE();
                 vm_push(vm, cur_frame->slots[slot]);
 #ifdef DEBUG
-                printf("GET LOCAL %d ", slot); lobj_println(vm->stack[slot]);
+                printf("GET LOCAL %d ", slot); lobj_println(&vm->stack[slot]);
 #endif
             } break;
             case I_SET_LOCAL: {
                 uint8_t slot = READ_BYTE();
                 lobj v  = vm_peek(vm, 0);
 #ifdef DEBUG
-                printf("SET LOCAL %d  ", slot); lobj_println(v);
+                printf("SET LOCAL %d  ", slot); lobj_println(&v);
 #endif
                 //given a stack index, set the value on the stack at slot to where stack_top is currently 
                 cur_frame->slots[slot] = v;
@@ -212,7 +209,7 @@ void vm_exec(VM *vm, int flags) {
             case I_RETURN: {
                 lobj value = vm_pop(vm);
 #ifdef DEBUG
-                printf("I_RETURN "); lobj_println(value);
+                printf("I_RETURN "); lobj_println(&value);
 #endif
                 vm->frame_count--;
                 if(vm->frame_count == 0) {
