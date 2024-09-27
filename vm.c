@@ -1,10 +1,10 @@
 #include "./vm.h"
 #include "mpc.h"
+#include <stdio.h>
 #include <string.h>
 #include "./lobj.h"
+#include "table.h"
 
-int IS_NUM(lobj l){ return l.type == LVAL_NUM; }
-int IS_OBJ(lobj l){ return l.type == LVAL_OBJ; }
 
 static int apply(VM* vm, lobj* obj, int argc) {
     if(obj->type != LVAL_OBJ) {
@@ -47,12 +47,20 @@ void vm_create(VM* vm, lobj* main) {
     vm->frame_count=0;
     table_create(&vm->globals);
     table_create(&vm->strings);
+    lobj s = lobj_str("abc", 3);
+    vm_string* str = AS_STR(s);
+    table_set(&vm->globals, str, lobj_num(5));
     if(apply(vm, main, 0) != 1) {
         printf("main fn failed");
+
         exit(1);
     }
+    lobj v;
+    table_get(&vm->globals, str, &v);
+    printf("abc = ");
+    lobj_println(v);
+    printf("Ok");
 }
-
 
 void vm_push(VM *vm, lobj value) {
     *vm->stack_top = value;

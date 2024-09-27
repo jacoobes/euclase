@@ -12,14 +12,13 @@ uint32_t hash_str(char * contents, int len) {
     return hash;
 }
 
-lobj lobj_str(char * contents, int len) {
+lobj lobj_str(char* contents, int len) {
     //FIX ME: PROPERLY MANAGE MEMORY
     vm_string* s = malloc(sizeof(vm_string));
     //FIX ME: PROPERLY MANAGE MEMORY
     s->contents = malloc(len + 1);
     strncpy(s->contents, contents, len);
     s->contents[len] = '\0'; 
-
     s->len = len;
     s->hash= hash_str(contents, len);
     s->obj.type=OBJ_STR;
@@ -33,7 +32,6 @@ lobj lobj_str(char * contents, int len) {
 lobj lobj_num(double x) {
   return (lobj){.type=LVAL_NUM, .v.num = x };
 }
-
 lobj lobj_func(uint8_t* initial_code,
                uint8_t code_ct,
                lobj* values,

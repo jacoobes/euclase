@@ -1,5 +1,7 @@
 #include "./table.h"
 #include "./memory.h"
+#include "lobj.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -19,14 +21,14 @@ static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
             }
         } else if(entry->key == k) {
             return entry;
-        }        
+        }
         index = (index+1) % capacity;
     }
 }
 
 //misnomer= we create a new array, freeing the old one and deleting it
 static void adjust_capacity (HashTable* tbl, int capacity) {
-    TableEntry* new_entries = ALLOCATE(TableEntry, capacity) ;
+    TableEntry* new_entries = ALLOCATE(TableEntry, capacity);
     for(int i = 0; i < capacity; i++) {
         new_entries[i].key = NULL;
         new_entries[i].value = lobj_num(0);
@@ -53,9 +55,13 @@ static void adjust_capacity (HashTable* tbl, int capacity) {
 int table_set(HashTable* tbl, vm_string* k, lobj v) {
     if(tbl->count + 1 > tbl->capacity * TABLE_MAX_LOAD) {
         int new_cap = MAX(11, tbl->capacity*2);
+#if DEBUG
+        printf("Adjusting capacity\n");
+#endif
         adjust_capacity(tbl, new_cap);
         //realloc ruins our bucket locations. we need to resize and put items in the right spots.
     }
+    
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k);
     int isNewKey =maybe_entry->key == NULL;
     if (isNewKey && (IS_NUM(maybe_entry->value) && maybe_entry->value.v.num == -651)) tbl->count++;
@@ -86,7 +92,7 @@ void table_create(HashTable* tbl) {
     tbl->count = 0;
     //using java's default initial cap
     tbl->capacity=11; 
-    tbl->entries=malloc(sizeof(lobj) * tbl->capacity);
+    tbl->entries=malloc(sizeof(TableEntry) * tbl->capacity);
 }
 
 vm_string* table_find_string(HashTable* table, const char* chars,

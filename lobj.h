@@ -3,14 +3,16 @@
 
 #include <stdint.h>
 
-enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_STR, LVAL_OBJ };
+typedef enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_STR, LVAL_OBJ } LVAL;
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
-enum { OBJ_STR, OBJ_FUNC, OBJ_USR };
+typedef enum { OBJ_STR, OBJ_FUNC, OBJ_USR } LOBJ_TYPE;
 
+// the base object class
 typedef struct {
-   int type; 
+   LOBJ_TYPE type; 
 } vm_object;
 
+// a union of all possible virtual machine values
 typedef union {
     double num;
     int err;
@@ -18,8 +20,9 @@ typedef union {
 } Value;
 
 /* Declare New lval Struct */
+// discriminated union. int is the type of 
 typedef struct {
-  int type;
+  LVAL type;
   Value v;
 } lobj; //lisp object
 
@@ -43,8 +46,12 @@ typedef struct {
 } vm_string;
 
 
-int IS_NUM(lobj l);
-int IS_OBJ(lobj l);
+#define IS_NUM(obj) ((obj).type == LVAL_NUM)
+
+#define IS_OBJ(obj) ((obj).type == LVAL_OBJ)
+
+#define AS_STR(obj_) ((vm_string*)(obj_).v.obj)
+
 lobj lobj_str(char *, int len);
 lobj lobj_num(double x);
 lobj lobj_func(uint8_t* initial_code, uint8_t code_ct, lobj* values, int values_count, uint8_t arity, lobj name);

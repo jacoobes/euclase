@@ -19,7 +19,7 @@ static uint8_t main_code[] = {
 int main() {
     
     
-    lobj add_fn_values[]={};
+    lobj add_fn_values[1];
     lobj add = lobj_func(add_code, sizeof(add_code),
             add_fn_values, sizeof(add_fn_values) / sizeof(lobj),
             ADD_ARITY, lobj_str("add", 3));
@@ -32,10 +32,10 @@ int main() {
                           main_fn_values, sizeof(main_fn_values) / sizeof(lobj),
                           main_arity, lobj_str("__main__", 8));
     //todo: init
-    HashTable globals;
-    vm_create(&vm, globals, &main);
     //apply main function
-
+    
+    vm_create(&vm, &main);
     //vm_exec(&vm, 0);
+    return 0;
 
 }
