@@ -36,6 +36,10 @@ lobj lobj_num(double x) {
   return (lobj){.type=LVAL_NUM, .v.num = x };
 }
 
+void vm_function_create(vm_function* fn) {
+    fn->obj.type=OBJ_FUNC;
+}
+
 lobj lobj_func(uint8_t* initial_code,
                uint8_t code_ct,
                lobj* values,
@@ -44,13 +48,14 @@ lobj lobj_func(uint8_t* initial_code,
                lobj name) {
     //FIX ME: PROPERLY MANAGE MEMORY
     vm_function* fn = ALLOCATE(vm_function, 1);
-
-    fn->obj.type=OBJ_FUNC;
+    vm_function_create(fn);
 
     fn->chunk=initial_code;
-    fn->chunk_ct=sizeof(initial_code);
+    fn->chunk_ct=code_ct;
+
     fn->values=values;
     fn->values_ct=values_count;
+
     fn->arity=arity;
     fn->name=name; 
     return (lobj){
@@ -59,14 +64,6 @@ lobj lobj_func(uint8_t* initial_code,
     };
 }
 
-
-/* Create a new error type lobj */
-lobj lobj_err(int x) {
-  lobj o;
-  o.type = LVAL_ERR ;
-  o.v.err = x;
-  return o;
-}
 
 
 void lobj_free(lobj* o) {

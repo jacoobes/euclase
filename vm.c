@@ -1,5 +1,4 @@
 #include "./vm.h"
-#include "mpc.h"
 #include <stdio.h>
 #include <string.h>
 #include "./lobj.h"
@@ -232,6 +231,5 @@ void vm_exec(VM *vm, int flags) {
 }
 
 void vm_free(VM* vm) {
-    printf("IMPL ME\n");
     exit(1);    
 }

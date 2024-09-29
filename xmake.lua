@@ -4,9 +4,11 @@ target("solid-waffle")
     set_kind("static")
     add_files("lobj.c")
     add_files("memory.c")
-    add_files("mpc.c")
     add_files("table.c")
     add_files("vm.c")
+    if is_plat("linux", "macosx") then
+         add_syslinks("readline")
+     end
     add_defines("DEBUG")
 
 target("main")
@@ -20,6 +22,7 @@ target("vmtest")
     add_files("vmtest.c")
     set_languages("c11")
     add_deps("solid-waffle")
+
 
 --
 -- If you want to known more usage about xmake, please see https://xmake.io

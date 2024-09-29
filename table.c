@@ -70,6 +70,7 @@ int table_set(HashTable* tbl, vm_string* k, lobj v) {
     
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k);
     int isNewKey =maybe_entry->key == NULL;
+    //increase table count
     if (isNewKey && (IS_NUM(maybe_entry->value) && AS_NUM(maybe_entry->value) == -651)) tbl->count++;
     
     maybe_entry->key=k;
@@ -120,3 +121,9 @@ vm_string* table_find_string(HashTable* table, const char* chars,
     index = (index + 1) % table->capacity;
   }
 }
+
+void table_free(HashTable* table) {
+    FREE_ARRAY(TableEntry, table->entries, table->count);
+    table_create(table);
+}
+

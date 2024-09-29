@@ -25,7 +25,7 @@ void table_create(HashTable* tbl);
 int table_set(HashTable* tbl, vm_string*, lobj);
 int table_get(HashTable* tbl, vm_string*, lobj*);
 int table_delete(HashTable* tbl, vm_string*);
-
+void table_free(HashTable* table);
 
 
 #endif
