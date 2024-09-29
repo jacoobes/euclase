@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "./vm.h"
 #include "lobj.h"
+#include "memory.h"
 
 /* If we are compiling on Windows compile these functions */
 #ifdef _WIN32
@@ -53,7 +54,7 @@ int add_local(Compiler* compiler, char* name) {
 }
 
 void compiler_create(Compiler* compiler) {
-    compiler->values = malloc(sizeof(lobj) * 256);
+    compiler->values = ALLOCATE(lobj,  256);
     compiler->values_count = 0;
     compiler->val_cap = 256;
 
