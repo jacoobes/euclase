@@ -158,20 +158,14 @@ SExpr* read_string(const char* input, int* pos) {
 
 
 SExpr* read_atom(const char* input, int* pos);
-SExpr* read_list(const char* input, int* pos, SExpr* cur);
+SExpr* read_list(const char* input, int* pos);
 
 SExpr* read_atom(const char* input, int* pos) {
     char cur = skip_whitespace(input, pos);
     if (isdigit(cur)) {
         return read_number(input, 1, pos);
     }
-    if(cur == '(') {
-        (*pos)++; //skip cur
-        SExpr* list_expr = ALLOCATE(SExpr, 1);
-        list_expr->type=SEXPR_LIST;
-        list_expr->value.next = NULL;
-        return read_list(input, pos, list_expr);
-    }
+
 //    if (cur == '-') {
 //        if(input[*pos + 1] == '\0') {
 //            printf("Invalid number\n");
@@ -193,12 +187,19 @@ SExpr* read_atom(const char* input, int* pos) {
 }
 // recursively reads a list.
 // starts off with root node (cur)
-SExpr* read_list(const char* input,
-                int* pos,
-                SExpr* root) {
-    int balance = 1;
-    
-    return root;
+SExpr* read_list(const char* input, int* pos) {
+    char next = skip_whitespace(input, pos);
+    if(next == ')') {
+        return NULL;
+    }
+    if (next == '(') {
+        SExpr* list = ALLOCATE(SExpr, 1);
+        list->type = SEXPR_LIST;
+        list->value.next = read_list(input, pos);
+        return list;
+    } else {
+        return read_atom(input, pos);
+    }
 }
 
 SExpr** read_all(const char* input, size_t* count) {
@@ -213,9 +214,23 @@ SExpr** read_all(const char* input, size_t* count) {
             while (input[i] != '\0' && input[i] != '\n') i++;
             continue;
         }
-        
+
         SExpr* expr;
-        expr = read_atom(input, &i);
+        if(cur == '(') {
+            i++; //skip cur
+            SExpr* list_expr = ALLOCATE(SExpr, 1);
+            list_expr->type= SEXPR_LIST;
+            list_expr->value.next = read_list(input, &i);
+            SExpr* cur = list_expr->value.next ;
+            while(cur != NULL) {
+                cur->value.next = read_list(input, &i);
+                cur = cur->value.next;
+            }
+            expr = list_expr;
+        } else {
+            expr = read_atom(input, &i);
+        }
+        
         if (*count == capacity) {
             capacity = capacity ? capacity * 2 : 1;
             exprs = realloc(exprs, capacity * sizeof(SExpr*));
@@ -264,7 +279,7 @@ void print_sexpr(SExpr* expr) {
             printf("(");
             SExpr* cur = expr->value.next;
             while(cur != NULL) {
-                print_sexpr(cur);
+                print_sexpr(cur); printf(" ");
                 cur = cur->value.next;
             }
             printf(")");
