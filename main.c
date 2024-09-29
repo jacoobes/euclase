@@ -32,15 +32,6 @@ void add_history(char* unused) {}
 #include <editline/history.h>
 #endif//may need to use editline for mac linux repl
 
-char* string_duplicate(const char* s) {
-    size_t len = strlen(s) + 1;
-    char* new_str = malloc(len);
-    if (new_str == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        exit(1);
-    }
-    return strcpy(new_str, s);
-}
 
 typedef enum {
     SEXPR_NUMBER,
@@ -98,7 +89,8 @@ SExpr* read_number(const char* input, int sign, int* pos) {
 }
 
 SExpr* read_symbol(const char* input, int* pos) {
-    char symbol[256] = {0};
+    int capacity = 256; 
+    char* symbol = calloc(capacity, sizeof(char));
     int i = 0;
     char c = input[*pos];
     while (is_identifier_char(c)) {
@@ -106,31 +98,45 @@ SExpr* read_symbol(const char* input, int* pos) {
         c = input[++(*pos)];
     }
     SExpr* expr = ALLOCATE(SExpr, 1);
-//    if (strcmp(symbol, "true") == 0) {
-//        expr->type = SEXPR_BOOLEAN;
-//        expr->value.boolean = true;
-//    } else if (strcmp(symbol, "false") == 0) {
-//        expr->type = SEXPR_BOOLEAN;
-//        expr->value.boolean = false;
-//    } 
-    expr->type = SEXPR_SYMBOL;
-    expr->value.symbol = string_duplicate(symbol);
-   
+    if (strcmp(symbol, "true") == 0) {
+        expr->type =  SEXPR_NUMBER;
+        expr->value.number = 1;
+    } else if (strcmp(symbol, "false") == 0) {
+        expr->type = SEXPR_NUMBER;
+        expr->value.number = 0;
+    } else {
+        expr->type = SEXPR_SYMBOL;
+        expr->value.symbol = symbol;
+    }
     return expr;
 }
 
 SExpr* read_string(const char* input, int* pos) {
-    char str[1024] = {0};
+    int capacity = 256; 
+    char* str = calloc(capacity, sizeof(char));
     int i = 0;
     bool escape = false;
     (*pos)++; // skip '"'
     char c = input[*pos];
     while (c != '"' || escape) {
+        if(c == '\0') {
+            printf("unclosed string\n");
+            exit(1);
+        }
+        if(i >= capacity) {
+            capacity *= 2;
+            str = realloc(str, capacity);
+            if(str == NULL) {
+                printf("while reallocating buffer, it returned null");
+                exit(1);
+            }
+        }
         if (escape) {
             switch (c) {
                 case 'n': str[i++] = '\n'; break;
                 case 't': str[i++] = '\t'; break;
                 case 'r': str[i++] = '\r'; break;
+                case '"': str[i++] = '\"'; break;
                 default: str[i++] = c; break;
             }
             escape = false;
@@ -144,24 +150,27 @@ SExpr* read_string(const char* input, int* pos) {
         c = input[++(*pos)];
     }
     (*pos)++; // skip '"'
-    SExpr* expr = malloc(sizeof(SExpr));
+    SExpr* expr = ALLOCATE(SExpr, 1);
     expr->type = SEXPR_STRING;
-    expr->value.string = string_duplicate(str);
+    expr->value.string = str;
     return expr;
 }
 
+
 SExpr* read_atom(const char* input, int* pos);
-SExpr* read_list(const char* input, int* pos);
+SExpr* read_list(const char* input, int* pos, SExpr* cur);
 
 SExpr* read_atom(const char* input, int* pos) {
     char cur = skip_whitespace(input, pos);
-    //printf("cur %c\n", cur);
     if (isdigit(cur)) {
         return read_number(input, 1, pos);
     }
     if(cur == '(') {
-        (*pos)++;
-        return read_list(input, pos);
+        (*pos)++; //skip cur
+        SExpr* list_expr = ALLOCATE(SExpr, 1);
+        list_expr->type=SEXPR_LIST;
+        list_expr->value.next = NULL;
+        return read_list(input, pos, list_expr);
     }
 //    if (cur == '-') {
 //        if(input[*pos + 1] == '\0') {
@@ -174,36 +183,22 @@ SExpr* read_atom(const char* input, int* pos) {
         return read_symbol(input, pos);
     }
     if (cur == '"') {
-        return read_string(input, pos);
+        SExpr* expr = read_string(input, pos);
+        printf("len of string %zu\n", strlen(expr->value.string));
+        return expr;
     }
 
     fprintf(stderr, "Failed to read: '%c'\n", cur);
     exit(1);
 }
-SExpr* cons(SExpr* x,
-            SExpr* list) {
-
-}
-
+// recursively reads a list.
+// starts off with root node (cur)
 SExpr* read_list(const char* input,
-                int* pos) {
-    SExpr* list_expr = ALLOCATE(SExpr, 1);
-    SExpr* cur = list_expr;
-    list_expr->type = SEXPR_LIST;
-    while (input[*pos] != ')') {
-        if (isspace(input[*pos])) {
-            (*pos)++;
-            continue;
-        }
-        SExpr* element;
-        if (input[*pos] == '(' ) {
-            element = read_list(input, pos);
-        } else {
-            element = read_atom(input, pos);
-        }
-    }
-    (*pos)++; // skip last ')'
-    return list_expr;
+                int* pos,
+                SExpr* root) {
+    int balance = 1;
+    
+    return root;
 }
 
 SExpr** read_all(const char* input, size_t* count) {
@@ -236,7 +231,6 @@ void free_sexpr(SExpr* expr) {
     if (expr == NULL) return;
     switch (expr->type) {
         case SEXPR_SYMBOL:
-        case SEXPR_STRING:
             free(expr->value.symbol);
             break;
         case SEXPR_LIST:
@@ -245,12 +239,14 @@ void free_sexpr(SExpr* expr) {
 //            }
 //            free(expr->value.list.elements);
             break;
+        case SEXPR_STRING:
+            free(expr->value.string);
+            break;
         default:
             break;
     }
     free(expr);
 }
-
 // Helper function to print SExpr (for testing)
 void print_sexpr(SExpr* expr) {
     if (expr == NULL) return;
@@ -266,19 +262,19 @@ void print_sexpr(SExpr* expr) {
             break;
         case SEXPR_LIST:
             printf("(");
-//            for (size_t i = 0; i < expr->value.list.size; i++) {
-//                print_sexpr(expr->value.list.elements[i]);
-//                if (i < expr->value.list.size - 1) printf(" ");
-//            }
+            SExpr* cur = expr->value.next;
+            while(cur != NULL) {
+                print_sexpr(cur);
+                cur = cur->value.next;
+            }
             printf(")");
             break;
     }
 }
-
 int main(int argc, char** argv) {
   puts("Version 0.0.0.0.3");
   puts("Press Ctrl+c to Exit\n");
-
+ 
     /* Define them with the following Language */
 //  mpca_lang(MPCA_LANG_DEFAULT,
 //    "                                                     \
@@ -299,9 +295,9 @@ int main(int argc, char** argv) {
     
     for (size_t i = 0; i < count; i++) {
         print_sexpr(exprs[i]);
-        printf("\n");
+        printf(" ");
     }
-    /* Echo input back to user */
+    printf("\n");
     free(input);
     for (size_t i = 0; i < count; i++) {
         free_sexpr(exprs[i]);
