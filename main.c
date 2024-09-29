@@ -93,6 +93,7 @@ SExpr* read_symbol(const char* input, int* pos) {
     char* symbol = calloc(capacity, sizeof(char));
     int i = 0;
     char c = input[*pos];
+    // fixme: buffer overflow
     while (is_identifier_char(c)) {
         symbol[i++] = c;
         c = input[++(*pos)];
@@ -193,12 +194,16 @@ SExpr* read_list(const char* input, int* pos) {
         return NULL;
     }
     if (next == '(') {
+        printf("next: list\n");
         SExpr* list = ALLOCATE(SExpr, 1);
         list->type = SEXPR_LIST;
         list->value.next = read_list(input, pos);
         return list;
     } else {
-        return read_atom(input, pos);
+        printf("next: atom\n");
+        SExpr* atom = read_atom(input, pos);
+        printf("next ch '%c'\n", input[*pos]);
+        return atom;
     }
 }
 
@@ -267,16 +272,16 @@ void print_sexpr(SExpr* expr) {
     if (expr == NULL) return;
     switch (expr->type) {
         case SEXPR_NUMBER:
-            printf("%f", expr->value.number);
+            printf("(num %f)", expr->value.number);
             break;
         case SEXPR_SYMBOL:
-            printf("%s", expr->value.symbol);
+            printf("(sym `%s`)", expr->value.symbol);
             break;
         case SEXPR_STRING:
-            printf("\"%s\"", expr->value.string);
+            printf("(str \"%s\")", expr->value.string);
             break;
         case SEXPR_LIST:
-            printf("(");
+            printf("(li");
             SExpr* cur = expr->value.next;
             while(cur != NULL) {
                 print_sexpr(cur); printf(" ");
