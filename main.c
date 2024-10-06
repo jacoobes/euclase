@@ -40,17 +40,17 @@ typedef enum {
     SEXPR_LIST
 } SExprType;
 
-typedef struct SExpr SExpr;
+    typedef struct SExpr SExpr;
 
-struct SExpr {
-    SExprType type;
-    union {
-        double number;
-        char* symbol;
-        char* string;
+    struct SExpr {
+        SExprType type;
+        union {
+            double number;
+            char* symbol;
+            char* string;
+        } value;
         SExpr* next;
-    } value;
-};
+    };
 
 bool is_identifier_char(char c) {
     return isalnum(c) || c == '_' || c == '-' || c == '+' || c == '*' || c == '/' || c == '<' || c == '>' || c == '=' || c == '!';
@@ -109,6 +109,7 @@ SExpr* read_symbol(const char* input, int* pos) {
         expr->type = SEXPR_SYMBOL;
         expr->value.symbol = symbol;
     }
+
     return expr;
 }
 
@@ -190,21 +191,30 @@ SExpr* read_atom(const char* input, int* pos) {
 // starts off with root node (cur)
 SExpr* read_list(const char* input, int* pos) {
     char next = skip_whitespace(input, pos);
-    if(next == ')') {
-        return NULL;
+
+    SExpr* head = ALLOCATE(SExpr, 1);
+    head->type = SEXPR_LIST;
+    head->next = NULL;
+    SExpr* cur = NULL;
+    while(next != ')') {
+        SExpr* el;
+        if(next == '(') {
+            // todo
+        } else {
+            el = read_atom(input, pos);
+            el->next = NULL;
+        }
+        if(cur == NULL) {
+            cur = el;
+            head->next = cur;
+        } else {
+            cur->next = el;
+            cur = cur->next;
+        }
+        next = skip_whitespace(input, pos);
     }
-    if (next == '(') {
-        printf("next: list\n");
-        SExpr* list = ALLOCATE(SExpr, 1);
-        list->type = SEXPR_LIST;
-        list->value.next = read_list(input, pos);
-        return list;
-    } else {
-        printf("next: atom\n");
-        SExpr* atom = read_atom(input, pos);
-        printf("next ch '%c'\n", input[*pos]);
-        return atom;
-    }
+    cur->next = NULL;
+    return head;
 }
 
 SExpr** read_all(const char* input, size_t* count) {
@@ -223,17 +233,10 @@ SExpr** read_all(const char* input, size_t* count) {
         SExpr* expr;
         if(cur == '(') {
             i++; //skip cur
-            SExpr* list_expr = ALLOCATE(SExpr, 1);
-            list_expr->type= SEXPR_LIST;
-            list_expr->value.next = read_list(input, &i);
-            SExpr* cur = list_expr->value.next ;
-            while(cur != NULL) {
-                cur->value.next = read_list(input, &i);
-                cur = cur->value.next;
-            }
-            expr = list_expr;
+            expr = read_list(input, &i);
         } else {
             expr = read_atom(input, &i);
+            expr->next = NULL;
         }
         
         if (*count == capacity) {
@@ -246,6 +249,7 @@ SExpr** read_all(const char* input, size_t* count) {
     
     return exprs;
 }
+void print_sexpr(SExpr* expr);
 
 void free_sexpr(SExpr* expr) {
     if (expr == NULL) return;
@@ -253,18 +257,27 @@ void free_sexpr(SExpr* expr) {
         case SEXPR_SYMBOL:
             free(expr->value.symbol);
             break;
-        case SEXPR_LIST:
-//            for (size_t i = 0; i < expr->value.list.size; i++) {
-//                free_sexpr(expr->value.list.elements[i]);
-//            }
-//            free(expr->value.list.elements);
-            break;
+        case SEXPR_LIST: {
+            SExpr* cur = expr->next;
+            while(cur != NULL) {
+                // Store the next node before deleting current
+                SExpr* temp = cur->next;
+                //printf("is null %d\n", temp == NULL);
+                // Delete the current node
+                free_sexpr(cur);
+                // Move to the next node
+                cur = temp;
+            }
+        } break;
         case SEXPR_STRING:
             free(expr->value.string);
             break;
+        case SEXPR_NUMBER: break; // no op
         default:
+            printf("unknown thing to free.\n");
             break;
     }
+    //we free the wrapped SExpression struct
     free(expr);
 }
 // Helper function to print SExpr (for testing)
@@ -282,12 +295,15 @@ void print_sexpr(SExpr* expr) {
             break;
         case SEXPR_LIST:
             printf("(li");
-            SExpr* cur = expr->value.next;
+            SExpr* cur = expr->next;
             while(cur != NULL) {
                 print_sexpr(cur); printf(" ");
-                cur = cur->value.next;
+                cur = cur->next;
             }
             printf(")");
+            break;
+        default:
+            printf("UNKNOWN TYPE WHILE PRINTING");
             break;
     }
 }
@@ -305,13 +321,14 @@ int main(int argc, char** argv) {
 //        prog : /^/ <expr>* /$/ ;                          \
 //    ",
 //    Number, Symbol, Sexpr, Expr, Euclase);
+//Create a repl environment
   while(1) {
     char* input = readline("euclase>");
     if (input && *input)
         add_history(input);
     size_t count;
     int i = 0;
-    SExpr** exprs = read_all(input, &count);
+    SExpr** exprs = read_all("( 1 2)", &count);
     
     for (size_t i = 0; i < count; i++) {
         print_sexpr(exprs[i]);
@@ -319,6 +336,7 @@ int main(int argc, char** argv) {
     }
     printf("\n");
     free(input);
+    printf("Num expressions: %zu\n", count);
     for (size_t i = 0; i < count; i++) {
         free_sexpr(exprs[i]);
     }
