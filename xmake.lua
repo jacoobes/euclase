@@ -24,6 +24,11 @@ target("vmtest")
     add_deps("solid-waffle")
 
 
+target("test")
+    set_kind("binary")
+    add_files("test.c")
+    set_languages("c11")
+    add_deps("solid-waffle")
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --

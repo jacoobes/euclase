@@ -164,6 +164,7 @@ SExpr* read_list(const char* input, int* pos);
 
 SExpr* read_atom(const char* input, int* pos) {
     char cur = skip_whitespace(input, pos);
+    printf("cur %c\n", input[*pos]);
     if (isdigit(cur)) {
         return read_number(input, 1, pos);
     }
@@ -190,30 +191,30 @@ SExpr* read_atom(const char* input, int* pos) {
 // recursively reads a list.
 // starts off with root node (cur)
 SExpr* read_list(const char* input, int* pos) {
-    char next = skip_whitespace(input, pos);
-
+    advance(pos); // skip the first '('
     SExpr* head = ALLOCATE(SExpr, 1);
-    head->type = SEXPR_LIST;
-    head->next = NULL;
+        head->type = SEXPR_LIST;
+        head->next = NULL;
     SExpr* cur = NULL;
-    while(next != ')') {
+    while(*pos < strlen(input) && input[*pos] != ')') {
+        char next = skip_whitespace(input, pos);
         SExpr* el;
         if(next == '(') {
-            // todo
-        } else {
+            el = read_list(input, pos);
+        }  else {
             el = read_atom(input, pos);
-            el->next = NULL;
         }
         if(cur == NULL) {
-            cur = el;
-            head->next = cur;
+             cur = el;
+             head->next = cur;
         } else {
-            cur->next = el;
-            cur = cur->next;
+             cur->next = el;
+             cur = cur->next;
         }
-        next = skip_whitespace(input, pos);
     }
     cur->next = NULL;
+    skip_whitespace(input, pos);
+    advance(pos);
     return head;
 }
 
@@ -232,11 +233,10 @@ SExpr** read_all(const char* input, size_t* count) {
 
         SExpr* expr;
         if(cur == '(') {
-            i++; //skip cur
+
             expr = read_list(input, &i);
         } else {
             expr = read_atom(input, &i);
-            expr->next = NULL;
         }
         
         if (*count == capacity) {
@@ -322,24 +322,24 @@ int main(int argc, char** argv) {
 //    ",
 //    Number, Symbol, Sexpr, Expr, Euclase);
 //Create a repl environment
-  while(1) {
-    char* input = readline("euclase>");
-    if (input && *input)
-        add_history(input);
+//  while(1) {
+//    char* input = readline("euclase>");
+//    if (input && *input)
+//        add_history(input);
     size_t count;
     int i = 0;
-    SExpr** exprs = read_all("( 1 2)", &count);
+    SExpr** exprs = read_all("(2 ( 1 2 ) 2)", &count);
     
     for (size_t i = 0; i < count; i++) {
         print_sexpr(exprs[i]);
         printf(" ");
     }
     printf("\n");
-    free(input);
+    //free(input);
     printf("Num expressions: %zu\n", count);
     for (size_t i = 0; i < count; i++) {
         free_sexpr(exprs[i]);
     }
-  }
-  return 0;
+//}
+//  return 0;
 }
