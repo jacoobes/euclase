@@ -8,7 +8,7 @@ target("solid-waffle")
     add_files("vm.c")
     if is_plat("linux", "macosx") then
          add_syslinks("readline")
-     end
+    end
     add_defines("DEBUG")
 
 target("main")
