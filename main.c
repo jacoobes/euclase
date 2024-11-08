@@ -31,7 +31,7 @@ void add_history(char *unused) {
 #else
 #include <editline/readline.h>
 #include <editline/history.h>
-#endif//may need to use editline for mac linux repl
+#endif//_WIN32
 
 
 typedef enum {
@@ -52,7 +52,6 @@ struct SExpr {
         char *string;
         SExpr *list;
     } value;
-
     SExpr *next;
 };
 
@@ -317,7 +316,10 @@ void print_atom(SExpr *cur) {
             printf("(str \"%s\")", cur->value.string);
         break;
         case SEXPR_LIST:
+            printf("(li ");
             print_sexpr(cur->value.list);
+            printf(" )");
+
         break;
     }
 }
@@ -325,17 +327,11 @@ void print_atom(SExpr *cur) {
 void print_sexpr(SExpr *expr) {
     if (expr == NULL) return;
     SExpr *cur = expr;
-    if(cur->next == NULL) {
-        print_atom(cur);
-        return;
-    }
-    printf("(li");
     //printf("\nis null cur %d\n", NULL == cur);
     while (cur != NULL) {
         print_atom(cur);
         cur = cur->next;
     }
-    printf(")");
 
 }
 
