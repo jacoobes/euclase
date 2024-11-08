@@ -37,7 +37,8 @@ void add_history(char *unused) {
 typedef enum {
     SEXPR_NUMBER,
     SEXPR_SYMBOL,
-    SEXPR_STRING
+    SEXPR_STRING,
+    SEXPR_LIST,
 } SExprType;
 
 typedef struct SExpr SExpr;
@@ -49,12 +50,13 @@ struct SExpr {
         double number;
         char *symbol;
         char *string;
+        SExpr *list;
     } value;
 
     SExpr *next;
 };
 
-bool is_identifier_char(char c) {
+bool is_identifier_char(const char c) {
     return isalnum(c) || c == '_' || c == '-' || c == '+' || c == '*' || c == '/' || c == '<' || c == '>' || c == '=' ||
            c == '!';
 }
@@ -174,7 +176,7 @@ SExpr *read_atom(const char *input, int *pos);
 SExpr *read_list(const char *input, int *pos);
 
 SExpr *read_atom(const char *input, int *pos) {
-    char cur = skip_whitespace(input, pos);
+    char cur = input[*pos];
     //printf("cur %c\n", input[*pos]);
     if (isdigit(cur)) {
         return read_number(input, 1, pos);
@@ -209,9 +211,15 @@ SExpr* read_list(const char* input, int* pos) {
     SExpr* cur = NULL;
     while(*pos < strlen(input) && input[*pos] != ')') {
         char next = skip_whitespace(input, pos);
+        if(next == ')') {
+            break;
+        }
         SExpr* el;
         if(next == '(') {
-            el = read_list(input, pos);
+            el = ALLOCATE(SExpr, 1);
+            el->type = SEXPR_LIST;
+            el->value.list = read_list(input, pos);
+            el->next = NULL;
         }  else {
             el = read_atom(input, pos);
         }
@@ -226,7 +234,6 @@ SExpr* read_list(const char* input, int* pos) {
     if(!cur) {
         return head;
     }
-    cur->next = NULL;
     skip_whitespace(input, pos);
     advance(pos);
     return head;
@@ -248,7 +255,10 @@ SExpr **read_all(const char *input, size_t *count) {
 
         SExpr *expr;
         if (cur == '(') {
-            expr = read_list(input, &i);
+            expr = ALLOCATE(SExpr, 1);
+            expr->type = SEXPR_LIST;
+            expr->value.list = read_list(input, &i);
+            expr->next = NULL;
         } else {
             expr = read_atom(input, &i);
         }
@@ -271,27 +281,30 @@ SExpr **read_all(const char *input, size_t *count) {
 void print_sexpr(SExpr *expr);
 
 void free_sexpr(SExpr *expr) {
-    if (expr == NULL) return;
-    SExpr *cur;
     while(NULL != expr) {
-        cur = expr->next;
-        switch (cur->type) {
+        switch (expr->type) {
             case SEXPR_SYMBOL:
-                free(cur->value.symbol);
+                free(expr->value.symbol);
             break;
             case SEXPR_STRING:
-                free(cur->value.string);
+                free(expr->value.string);
             break;
+            case SEXPR_LIST:
+                free_sexpr(expr->value.list);
+                break;
             case SEXPR_NUMBER: break; // no op
-            default:
-                printf("unknown thing to free.\n");
-            break;
+
         }
-        expr = expr->next;
-        free(cur);
+        // save a temporary copy
+        SExpr *cur = expr->next;
+        // free head
+        free(expr);
+        //asign head to next element
+        expr = cur;
     }
     //we free the wrapped SExpression struct
 }
+
 void print_atom(SExpr *cur) {
     switch (cur->type) {
         case SEXPR_NUMBER:
@@ -302,6 +315,9 @@ void print_atom(SExpr *cur) {
         break;
         case SEXPR_STRING:
             printf("(str \"%s\")", cur->value.string);
+        break;
+        case SEXPR_LIST:
+            print_sexpr(cur->value.list);
         break;
     }
 }
@@ -351,6 +367,13 @@ char* read_file(const char *filename, size_t *size_read) {
     return buffer;
 }
 
+void emit(SExpr** exprs, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        SExpr *cur = exprs[i];
+
+    }
+}
+
 
 int main(int argc, char **argv) {
     puts("Version 0.0.0.0.3");
@@ -379,6 +402,7 @@ int main(int argc, char **argv) {
 
             size_t count;
             SExpr **exprs = read_all(buffer, &count); // or read appropriate function
+            printf("Number of expressions: %zu\n", count);
             for(int i =0; i < count; i++) {
                 free_sexpr(exprs[i]);
             }
@@ -400,6 +424,7 @@ int main(int argc, char **argv) {
                 print_sexpr(exprs[i]);
                 printf(" ");
             }
+            emit(exprs, count);
             printf("\n");
             //free(input);
             printf("Num expressions: %zu\n", count);
