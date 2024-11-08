@@ -27,3 +27,5 @@ add_executable(main ${MAIN_SOURCES})
 add_executable(test ${TEST_SOURCES})
 set_target_properties(main PROPERTIES OUTPUT_NAME "main")
 set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
+
+add_executable(vmtest vmtest.c vm.c)

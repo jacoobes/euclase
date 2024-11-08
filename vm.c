@@ -42,11 +42,14 @@ static int apply(VM* vm, lobj* obj, int argc) {
 void reset_stack(VM* vm) {
     vm->stack_top = vm->stack;
 }
-void vm_create(VM* vm, lobj* main) {
+void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     reset_stack(vm);
     vm->frame_count=0;
-    table_create(&vm->globals);
-    table_create(&vm->strings);
+    // tables should be already init'd
+    vm->globals = globals;
+    vm->strings = strings;
+//    table_create(&vm->globals);
+//    table_create(&vm->strings);
     if(apply(vm, main, 0) != 1) {
         printf("main fn failed");
         exit(1);

@@ -45,8 +45,8 @@ typedef struct {
 
 typedef struct {
     // global variable space
-    HashTable globals;
-    HashTable strings;
+    HashTable* globals;
+    HashTable* strings;
     // Operand stack, grows upwards
     lobj stack[256];
 
@@ -62,35 +62,17 @@ typedef struct {
 } VM;
 
 
-typedef struct {
-    vm_string name;
-    int depth;
-} Local;
 
-typedef struct {
-
-    uint8_t* code;
-    int code_cap;
-    int code_count;
-
-    lobj* values; 
-    int values_count;
-    int val_cap;
-
-
-    Local locals[MAX_LOCALS]; //subject to change
-    int scope_depth;
-    int local_count; 
-
-} Compiler;
 
 /**
  * Initializes a new virtual machine instance and prepares it to execute the given main function.
  *
  * @param vm A pointer to the virtual machine (VM) instance to be initialized.
+ * @param globals
+ * @param strings
  * @param main A pointer to the main function (represented as an lobj) to be executed by the VM.
  */
-void vm_create(VM* vm, lobj* main);
+void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main);
 
 /**
  * Executes the virtual machine with the given configuration and flags.

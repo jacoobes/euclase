@@ -24,8 +24,7 @@ char *readline(char *prompt) {
 }
 
 /* Fake add_history function */
-void add_history(char *unused) {
-}
+void add_history(char *unused) {}
 
 /* Otherwise include the editline headers */
 #else
@@ -33,6 +32,37 @@ void add_history(char *unused) {
 #include <editline/history.h>
 #endif//_WIN32
 #include "reader.h"
+
+
+#include "darray.h"  // Assuming you have a header file defining the darray macros and functions
+
+typedef struct {
+    darray(uint8_t) bytes;
+    HashTable* globals;
+    HashTable* strings;
+} Compiler;
+
+void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
+    darray_init(compiler->bytes);
+    compiler->globals=globals;
+    compiler->strings=strings;
+
+}
+
+void compiler_load_const(Compiler *compiler, SExpr expr*, uint8_t byte) {
+    //add expr to current vm compiling function, returning index
+    // ?
+    darray_append(compiler->bytes, byte);
+    //push index of current vm function to bytes
+    //   darray_append(compiler->bytes, idx);
+
+}
+
+void compiler_destroy(Compiler *compiler) {
+    darray_free(compiler->bytes);
+}
+
+
 
 char* read_file(const char *filename, size_t *size_read) {
     FILE *file = fopen(filename, "r");
@@ -62,20 +92,55 @@ char* read_file(const char *filename, size_t *size_read) {
     return buffer;
 }
 
-void emit(SExpr** exprs, size_t count) {
-    for (size_t i = 0; i < count; i++) {
-        SExpr *cur = exprs[i];
-        switch (cur->type) {
-            case SEXPR_NUMBER: {
-            }
-                break;
-            case SEXPR_SYMBOL:
-                break;
-            case SEXPR_STRING:
-                break;
-            case SEXPR_LIST:
-                break;
+void emit(Compiler* compiler, SExpr *expr) {
+    SExpr *cur = expr;
+    switch (cur->type) {
+        case SEXPR_NUMBER: {
         }
+        break;
+        case SEXPR_SYMBOL: {
+            char *symbol = cur->value.symbol;
+            //auto local_index = local_chart.resolve_symbol(symbol);
+            if (symbol) {
+                //push_byte(I_GET_LOCAL);
+                //push_byte(local_index);
+            } else if (false) {
+                //push_byte(I_GET_GLOBAL );
+                //auto idx = word_mappings.at(s->lexeme);
+                //push_byte(idx);
+            } else {
+                //throw std::runtime_error(s->lexeme + " is an unresolved symbol");
+            }
+        }
+        break;
+        case SEXPR_STRING: {
+            char *str = cur->value.string;
+        }
+        break;
+        case SEXPR_LIST: {
+            SExpr *listhead = cur->value.list;
+            if (listhead == NULL) {
+                printf("Error: Empty list\n");
+                exit(1);
+            }
+            if (listhead->type == SEXPR_SYMBOL) {
+                char *symbol = listhead->value.symbol;
+                if(strcmp(symbol, "exit") == 0) {
+                    printf("Exiting...\n");
+                    exit(0);
+                }
+                if(strcmp(symbol, "+") == 0) {
+                    SExpr *cur = listhead;
+
+                }
+
+            } else if (listhead->type == SEXPR_NUMBER) {
+                darray_push(compiler->bytes, I_LOAD);
+            } else {
+
+            }
+        }
+        break;
     }
 }
 
@@ -116,18 +181,32 @@ int main(int argc, char **argv) {
             size_t count;
             SExpr** exprs = read_all(input, &count);
 
+            HashTable globals, strings;
+            table_create(&globals);
+            table_create(&strings);
+
+            Compiler compiler;
+            compiler_create(&compiler, &globals, &strings);
+
+            for (size_t i = 0; i < count; i++) {
+                emit(&compiler, exprs[i]);
+            }
+            //VM vm;
+            //vm_create(&vm, &globals, &strings, NULL);
+            printf("\n");
             for (size_t i = 0; i < count; i++) {
                 print_sexpr(exprs[i]);
                 printf(" ");
             }
-            emit(exprs, count);
-
             printf("\n");
             //free(input);
             printf("Num expressions: %zu\n", count);
             for (size_t i = 0; i < count; i++) {
                 free_sexpr(exprs[i]);
             }
+            table_free(&globals);
+            table_free(&strings);
+            compiler_destroy(&compiler);
         }
     }
     return 0;

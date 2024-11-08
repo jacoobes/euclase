@@ -27,14 +27,17 @@ int main() {
     
     lobj main_fn_values[]={add, lobj_num(4), lobj_num(5)};
     VM vm;
-    
+    HashTable globals, strings;
+    table_create(&globals);
+    table_create(&strings);
+
     lobj main = lobj_func(main_code, sizeof(main_code),
                           main_fn_values, sizeof(main_fn_values) / sizeof(lobj),
                           main_arity, lobj_str("__main__"));
     //todo: init
     //apply main function
     
-    vm_create(&vm, &main);
+    vm_create(&vm, &globals, &strings, &main);
     vm_exec(&vm, 0);
     return 0;
 
