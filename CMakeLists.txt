@@ -7,15 +7,23 @@ cmake_minimum_required(VERSION 3.15.0)
 cmake_policy(SET CMP0091 NEW)
 project(main LANGUAGES C)
 
-set(SOURCES
+set(MAIN_SOURCES
         main.c memory.c  lobj.c table.c vm.c
+        reader.c
 )
+
+set(TEST_SOURCES
+        test.c reader.c memory.c
+)
+
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     find_package(Readline REQUIRED)
     target_link_libraries(main PRIVATE readline)
 endif()
 # target
-add_executable(main ${SOURCES})
+add_executable(main ${MAIN_SOURCES})
+
+add_executable(test ${TEST_SOURCES})
 set_target_properties(main PROPERTIES OUTPUT_NAME "main")
 set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")

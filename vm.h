@@ -8,8 +8,6 @@
 #define FALSE 0
 
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include "./table.h"
 
 
@@ -86,7 +84,28 @@ typedef struct {
 
 } Compiler;
 
-void vm_create(VM* vm, lobj* main); 
+/**
+ * Initializes a new virtual machine instance and prepares it to execute the given main function.
+ *
+ * @param vm A pointer to the virtual machine (VM) instance to be initialized.
+ * @param main A pointer to the main function (represented as an lobj) to be executed by the VM.
+ */
+void vm_create(VM* vm, lobj* main);
+
+/**
+ * Executes the virtual machine with the given configuration and flags.
+ *
+ * @param vm A pointer to the virtual machine instance to be executed.
+ * @param flags An integer representing the flags used for customizing the execution of the virtual machine.
+ */
 void vm_exec(VM*, int);
+
+/**
+ * Frees the memory associated with the given virtual machine (VM) instance.
+ * This function should be called to properly release the resources allocated
+ * by the VM.
+ *
+ * @param vm Pointer to the VM instance to be freed.
+ */
 void vm_free(VM* vm);
-#endif
+#endif //vm_h

@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-uint32_t hash_str(char * contents, int len) {
+uint32_t hash_str(const char * contents, int len) {
     uint32_t hash = 2166136261u;
     for (int i = 0; i < len; i++) {
         hash ^= (uint8_t)contents[i];
@@ -14,7 +14,7 @@ uint32_t hash_str(char * contents, int len) {
 }
 
 // NOTE: contents MUST BE NULL TERMINATED
-lobj lobj_str(char* contents) {
+lobj lobj_str(const char* contents) {
     int lencontents = strlen(contents);
     //FIX ME: PROPERLY MANAGE MEMORY
     vm_string* s = ALLOCATE(vm_string, 1);
