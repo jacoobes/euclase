@@ -55,6 +55,9 @@ typedef struct {
 #define AS_FUNC(obj_) ((vm_function*)(obj_).v.obj)
 #define AS_NUM(obj_) ((obj_).v.num)
 
+
+void vm_function_create(vm_function* fn);
+
 lobj lobj_str(const char *);
 lobj lobj_num(double x);
 lobj lobj_func(uint8_t* initial_code,
