@@ -40,16 +40,40 @@ typedef struct {
     darray(uint8_t) bytes;
     HashTable* globals;
     HashTable* strings;
+    vm_function* cur_function;
+    darray(vm_function*) functions;
 } Compiler;
+
+
+void compiler_set_cur_function(Compiler* compiler, vm_function* function) {
+    if (function == NULL) {
+        fprintf(stderr, "Error: function to be set is NULL\n");
+        exit(1);
+    }
+
+    if (function == compiler->cur_function) {
+        printf("Current function is already set\n");
+        return;
+    }
+
+    // Store the current function in the array
+    darray_push(compiler->functions, compiler->cur_function);
+    compiler->cur_function = function;
+}
+
+vm_function* compiler_cur_function(Compiler* compiler) {
+    return compiler->cur_function;
+}
 
 void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
     darray_init(compiler->bytes);
+    darray_init(compiler->functions);
     compiler->globals=globals;
     compiler->strings=strings;
 
 }
 
-void compiler_load_const(Compiler *compiler, SExpr expr*, uint8_t byte) {
+void compiler_load_const(Compiler *compiler, SExpr* expr, uint8_t byte) {
     //add expr to current vm compiling function, returning index
     // ?
     darray_append(compiler->bytes, byte);
