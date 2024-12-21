@@ -16,9 +16,7 @@ uint32_t hash_str(const char * contents, int len) {
 // NOTE: contents MUST BE NULL TERMINATED
 lobj lobj_str(const char* contents) {
     int lencontents = strlen(contents);
-    //FIX ME: PROPERLY MANAGE MEMORY
     vm_string* s = ALLOCATE(vm_string, 1);
-    //FIX ME: PROPERLY MANAGE MEMORY
     s->contents = malloc(lencontents + 1);
     strncpy(s->contents, contents, lencontents);
     s->contents[lencontents] = '\0'; 

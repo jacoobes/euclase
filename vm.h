@@ -11,6 +11,11 @@
 #include "./table.h"
 
 
+// infrastructure:
+// stack based machine
+// 
+
+
 enum Instruction {
     I_HALT        , // End execution 
     I_LOAD        , // Load value at index to stack.
@@ -23,7 +28,7 @@ enum Instruction {
     I_CALL        , // call function
     I_JMP         , // jmp to instr ptr
     I_JMP_FALSY   , // jmp if falsy
-    I_GET_LOCAL   ,
+    I_GET_LOCAL   , // Get local variable
     I_SET_LOCAL   ,
     I_POP,
     I_RETURN
@@ -52,10 +57,11 @@ typedef struct {
 
     //stack pointer. This points 1 PAST the top of the stack
     //I remember it like this:
-    //stackTop points to where the next value to be pushed will go.
+    //stack_top points to where the next value to be pushed will go.
     //The maximum number of values we can store on the stack (for now, at least) is 256
     lobj* stack_top;
     
+    // call stack: functions 
     CallFrame call_stack[DEFAULT_CALL_STACK_SIZE];
     int frame_count;
     

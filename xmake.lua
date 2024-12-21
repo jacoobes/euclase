@@ -5,7 +5,9 @@ target("solid-waffle")
     add_files("lobj.c")
     add_files("memory.c")
     add_files("table.c")
+    add_files('reader.c')
     add_files("vm.c")
+    add_files('asm.c')
     if is_plat("linux", "macosx") then
          add_syslinks("readline")
     end
@@ -23,6 +25,10 @@ target("vmtest")
     set_languages("c11")
     add_deps("solid-waffle")
 
+target('asm')
+    set_kind("binary")
+    add_deps("solid-waffle")
+    add_files("asm.c")
 
 target("test")
     set_kind("binary")

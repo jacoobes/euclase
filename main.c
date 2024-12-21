@@ -7,6 +7,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include "reader.h"
 /* If we are compiling on Windows compile these functions */
 #ifdef _WIN32
 #include <string.h>

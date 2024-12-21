@@ -104,7 +104,7 @@ void vm_exec(VM *vm, int flags) {
                 }
                 vm_push(vm, CONSTANT_AT(const_idx));
             } break;
-            case I_NEGATE:{
+            case I_NEGATE: {
                 lobj a = vm_pop(vm);
                 if (a.type == LVAL_NUM) {
                     vm_push(vm, (lobj){LVAL_NUM, {.num = -a.v.num}});
@@ -163,17 +163,19 @@ void vm_exec(VM *vm, int flags) {
                 }
             } break;
             case I_CALL: {
+                // arg count is operand.
                 uint8_t argc = READ_BYTE();
-                vm->frame_count++;
                 lobj maybe_callable = vm_peek(vm, argc);
 #ifdef DEBUG
                 printf("argc %d\n", argc);
                 printf("About to call function "); lobj_println(&maybe_callable);
 #endif
+                // apply: we take the maybe callable
                 if(!apply(vm, &maybe_callable, argc)) { 
                     printf("Call failed");
                     exit(1);
                 }
+                // afterwards, the current callstack is set to one less than previous.
                 cur_frame = &vm->call_stack[vm->frame_count - 1];
                 
             } break;

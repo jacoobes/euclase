@@ -1,8 +1,8 @@
-#include "reader.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "reader.h"
 
 void test_read_number() {
     int pos = 0;
