@@ -17,19 +17,21 @@ static void label_init(Label* l, char* name) {
     l->name = name;
     l->address=l->count;
 }
-static void labels_write(Assembler* assembler, const char* name ) {
-    Label l;
-    label_init(&l, strdup(name));
+static void labels_write(Assembler* assembler, char* name ) {
+    Label* l = ALLOCATE(Label, 1);
+    label_init(l, name);
+    assembler->current_label = l;
     darray_push(assembler->labels, l);
 }
 
 static Label* labels_find(LabelArray* array, const char* name) {
-    Label* labl;
+    Label** labl;
     darray_foreach(labl, *array) {
-        if (strcmp(labl->name, name) == 0) {
-            return labl;
+        if (strcmp((*labl)->name, name) == 0) {
+            return *labl;
         }
     }
+    printf("found nothind\n");
     return NULL;
 }
 
@@ -105,11 +107,10 @@ int asm_compile(Assembler* a, const char* source) {
         if(token == NULL) {
             continue;
         }
-        int len = strlen(token);
-//      // Check if it's a label definition
+        //      // Check if it's a label definition
         if (token[0] == ':') {
-            char* tokname = strdup(token) + 1; 
-            labels_write(a, token);
+            char* tokname = strdup(token + 1);  
+            labels_write(a, tokname);
             free(token);
             continue;
         }
@@ -123,13 +124,17 @@ int asm_compile(Assembler* a, const char* source) {
             write_byte(a, I_LOAD);
             char* operand = read_token(source, &pos);
             if(operand[0] == ':') {
-                char* tokname = token+1;
+                char* tokname = operand+1;
                 Label* addr = labels_find(&a->labels, tokname);
                 if(!addr) {
-                    printf("Could not find label");
+                    printf("Could not find label %s", tokname);
+                    exit(1);
                 }
-                //int constant = add_constant(a, lobj_func(addr));
-                write_byte(a, 0);
+                //printf("%s", addr->name);
+                int constant = add_constant(
+                    a, 
+                    lobj_func(addr->code, addr->count, addr->constants, addr->constants_count, 0, lobj_str(tokname)));
+                write_byte(a, constant);
             } else {
                 int value = parse_number(operand);
                 int constant = add_constant(a, lobj_num(value));
@@ -207,22 +212,31 @@ lobj asm_get_entry(Assembler* a) {
 
 void asm_free(Assembler* a) {
     // Free label names
+    Label** labl;
+    darray_foreach(labl, a->labels) {
+        free(*labl);
+    }
     darray_free(a->labels);
 }
+const char* add =
+    "; Simple program to add two numbers (3 + 4)\n"
+    "; Result should be 7                       \n"
+    ":add                                       \n"
+    "    LOAD 1                                 \n"
+    "    LOAD 2                                 \n"
+    "    ADD                                    \n"
+    "    RETURN                                 \n"
+
+    ":main                                     \n"
+    "   LOAD :add                              \n"
+    "   CALL 0                                 \n"
+    "   HALT            ; Stop program and show result\n";
 
 int main() {
-    const char* source = 
-    "; Simple program to add two numbers (3 + 4)\n"             \
-    "; Result should be 7                       \n"             \
-    ":main                                     \n"             \
-    "   LOAD 3          ; Push first number (3)\n"              \
-    "   LOAD 4          ; Push second number (4)\n"             \
-    "   ADD             ; Add numbers together\n"               \
-    "   HALT            ; Stop program and show result\n";      
-
+    printf("%s\n", add);
     Assembler assembler;
     asm_init(&assembler);
-    asm_compile(&assembler, source);
+    asm_compile(&assembler, add);
     
     VM vm;
     HashTable globals, strings;
@@ -230,12 +244,11 @@ int main() {
     table_create(&strings);
 
     lobj main = asm_get_entry(&assembler);
-    //todo: init
-    //apply main function
-    
+
     vm_create(&vm, &globals, &strings, &main);
     vm_exec(&vm, 0);
 
+    asm_free(&assembler);
     
 }
 

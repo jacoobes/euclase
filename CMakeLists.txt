@@ -16,6 +16,9 @@ set(TEST_SOURCES
         test.c reader.c memory.c
 )
 
+set(ASM_SOURCES
+    reader.c asm.c table.c lobj.c vm.c memory.c
+)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     find_package(Readline REQUIRED)
@@ -29,3 +32,4 @@ set_target_properties(main PROPERTIES OUTPUT_NAME "main")
 set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
 
 add_executable(vmtest vmtest.c vm.c)
+add_executable(asm ${ASM_SOURCES} )

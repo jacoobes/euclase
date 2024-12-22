@@ -18,7 +18,7 @@ typedef struct {
     int constants_count;
 } Label;
 
-typedef darray(Label) LabelArray;
+typedef darray(Label*) LabelArray;
 
 typedef struct {
     Label* current_label;
