@@ -39,7 +39,7 @@ static int apply(VM* vm, lobj* obj, int argc) {
 }
 
 
-void reset_stack(VM* vm) {
+static void reset_stack(VM* vm) {
     vm->stack_top = vm->stack;
 }
 void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
@@ -48,8 +48,6 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     // tables should be already init'd
     vm->globals = globals;
     vm->strings = strings;
-//    table_create(&vm->globals);
-//    table_create(&vm->strings);
     if(apply(vm, main, 0) != 1) {
         printf("main fn failed");
         exit(1);
@@ -72,16 +70,15 @@ lobj vm_peek(VM* vm, int distance) {
 }
 
 
-unsigned short parse_ushort (uint8_t* const chunk, size_t location) {
-    return (chunk[location-1] << 8) | chunk[location];
-}
-
 void vm_exec(VM *vm, int flags) {
     // framecount will always have one, the main function
     CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; 
 
     #define READ_BYTE() *cur_frame->ip++
     #define CONSTANT_AT(idx) cur_frame->function->values[idx]
+    #define READ_SHORT() \
+        (cur_frame->ip += 2, \
+            (uint16_t)(cur_frame->ip[-2] << 8 | cur_frame->ip[-1]))
 
     while (1) {
         uint8_t instruction;
@@ -177,20 +174,24 @@ void vm_exec(VM *vm, int flags) {
                 }
                 // afterwards, the current callstack is set to one less than previous.
                 cur_frame = &vm->call_stack[vm->frame_count - 1];
-                
             } break;
             case I_JMP: {
                 //advance current frame's instruction pointer by two bytes (uint16_t)
-                cur_frame->ip += 2; 
-                unsigned short jump = parse_ushort(cur_frame->ip, *cur_frame->ip);
+                uint16_t jump = READ_SHORT();
                 //after parsing the jump, we advance the instruction pointer by that
                 cur_frame->ip += jump;
             } break;
             case I_JMP_FALSY: {
-                lobj lval = vm_pop(vm);
+                lobj lval = vm_peek(vm, 0);
+                uint16_t jump = READ_SHORT(); 
+#ifdef DEBUG
+                printf("I_JMP_FALSY "); 
+                lobj_print(&lval);
+                printf(" %d\n", jump); 
+#endif
+
                 if(IS_NUM(lval) && !lval.v.num) {
-                    cur_frame->ip += 2; 
-                    unsigned short jump = parse_ushort(cur_frame->ip, *cur_frame->ip);
+                    // increment the pointer by jump
                     cur_frame->ip += jump;
                 }
             } break;
@@ -213,10 +214,14 @@ void vm_exec(VM *vm, int flags) {
             case I_POP: { vm_pop(vm); }  break;
             case I_RETURN: {
                 lobj value = vm_pop(vm);
+
+                vm->frame_count--;
 #ifdef DEBUG
+                printf("frame_count %d \n", vm->frame_count);
                 printf("I_RETURN "); lobj_println(&value);
 #endif
-                vm->frame_count--;
+                
+                //return from last frame
                 if(vm->frame_count == 0) {
                     vm_pop(vm);
                     exit(0);
@@ -224,14 +229,20 @@ void vm_exec(VM *vm, int flags) {
                 // push to top of stack
                 vm->stack_top = cur_frame->slots;
                 vm_push(vm, value);
+                cur_frame = &vm->call_stack[vm->frame_count - 1];
+            } break;
+            case I_LOOP: {
+                uint16_t jump = READ_SHORT();
+                cur_frame->ip -= jump;
             } break;
             default: {
-                puts("Unknown opcode, misalignment?");
+                printf("Unknown opcode '%c', misalignment?", instruction);
                 exit(1);
             }
         }
     }
     #undef READ_BYTE
+    #undef READ_SHORT
     #undef CONSTANT_AT
 
 }

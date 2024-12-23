@@ -29,9 +29,10 @@ enum Instruction {
     I_JMP         , // jmp to instr ptr
     I_JMP_FALSY   , // jmp if falsy
     I_GET_LOCAL   , // Get local variable
-    I_SET_LOCAL   ,
+    I_SET_LOCAL   , // SET LOCAL VARIABLE
     I_POP,
-    I_RETURN
+    I_RETURN,
+    I_LOOP
 };
 
 

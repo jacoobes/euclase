@@ -1,0 +1,8 @@
+:main 0                                   
+   LOAD 0                                 
+   JMP_FALSY 3                            
+   LOAD 4                                 
+   RETURN                                 
+   LOAD 3                                 
+   RETURN                                 
+

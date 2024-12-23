@@ -1,5 +1,6 @@
 #include "./vm.h"
 #include <stdint.h>
+#include <stdio.h>
 
 
 static uint8_t ADD_ARITY = 2;

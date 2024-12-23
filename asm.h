@@ -9,6 +9,8 @@
 typedef struct {
     char* name;
     int address;
+   
+    int arity;
 
     uint8_t* code;
     int capacity;

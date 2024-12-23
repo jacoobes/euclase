@@ -8,8 +8,9 @@
 #include "vm.h"
 
 
-static void label_init(Label* l, char* name) { 
+static void label_init(Label* l, char* name, int arity) { 
     l->code = NULL;
+    l->arity = arity;
     l->capacity = 0;
     l->count = 0;
     l->constants = malloc(sizeof(lobj) * 256);  // Max 256 constants
@@ -17,10 +18,11 @@ static void label_init(Label* l, char* name) {
     l->name = name;
     l->address=l->count;
 }
-static void labels_write(Assembler* assembler, char* name ) {
+static void labels_write(Assembler* assembler, char* name, int arity) {
     Label* l = ALLOCATE(Label, 1);
-    label_init(l, name);
+    label_init(l, name, arity);
     assembler->current_label = l;
+    //printf("setting current label to %s\n", name);
     darray_push(assembler->labels, l);
 }
 
@@ -49,11 +51,12 @@ static void write_byte(Assembler* a, uint8_t byte) {
     
     current_label->code[current_label->count] = byte;
     current_label->count++;
+    //printf("WRITING %d to %s\n", byte, current_label->name);
 }
 
-static void write_short(Assembler* a, uint16_t value) {
-    write_byte(a, (value >> 8) & 0xff);
-    write_byte(a, value & 0xff);
+static void write_uint16_t(Assembler* a, uint16_t value) {
+    write_byte(a, (value >> 8) & 0xFF);
+    write_byte(a, value & 0xFF);
 }
 
 static int add_constant(Assembler* a, lobj value) {
@@ -66,9 +69,9 @@ static int add_constant(Assembler* a, lobj value) {
     return cur->constants_count++;
 }
 
-static int parse_number(const char* token) {
+static long parse_number(const char* token) {
     char* end;
-    int value = strtol(token, &end, 10);
+    long value = strtol(token, &end, 10);
     if (*end != '\0') {
         printf("Invalid number: %s\n", token);
         exit(1);
@@ -110,8 +113,9 @@ int asm_compile(Assembler* a, const char* source) {
         //      // Check if it's a label definition
         if (token[0] == ':') {
             char* tokname = strdup(token + 1);  
-            labels_write(a, tokname);
-            free(token);
+            char* arity = read_token(source, &pos);
+            labels_write(a, tokname, parse_number(arity));
+            free(token); free(arity);
             continue;
         }
 #if DEBUG
@@ -130,10 +134,9 @@ int asm_compile(Assembler* a, const char* source) {
                     printf("Could not find label %s", tokname);
                     exit(1);
                 }
-                //printf("%s", addr->name);
                 int constant = add_constant(
                     a, 
-                    lobj_func(addr->code, addr->count, addr->constants, addr->constants_count, 0, lobj_str(tokname)));
+                    lobj_func(addr->code, addr->count, addr->constants, addr->constants_count, addr->arity, lobj_str(tokname)));
                 write_byte(a, constant);
             } else {
                 int value = parse_number(operand);
@@ -158,8 +161,9 @@ int asm_compile(Assembler* a, const char* source) {
             write_byte(a, I_RETURN);
         } else if (strcmp(token, "CALL") == 0) {
             write_byte(a, I_CALL);
-            token = read_token(source, &pos);
-            write_byte(a, parse_number(token));
+            char* operand = read_token(source, &pos);
+            write_byte(a, parse_number(operand));
+            free(operand);
         } else if (strcmp(token, "GET_LOCAL") == 0) {
             write_byte(a, I_GET_LOCAL);
             token = read_token(source, &pos);
@@ -172,12 +176,21 @@ int asm_compile(Assembler* a, const char* source) {
             write_byte(a, I_JMP);
             token = read_token(source, &pos);
             int offset = parse_number(token);
-            write_short(a, offset);
+            write_uint16_t(a, offset);
         } else if (strcmp(token, "JMP_FALSY") == 0) {
             write_byte(a, I_JMP_FALSY);
+            free(token);
             token = read_token(source, &pos);
-            int offset = parse_number(token);
-            write_short(a, offset);
+            uint16_t offset = parse_number(token);
+            write_uint16_t(a, offset);
+
+        } else if (strcmp(token, "LOOP") == 0) {
+            write_byte(a, I_LOOP);
+            free(token);
+            token = read_token(source, &pos);
+            uint16_t offset = parse_number(token);
+            write_uint16_t(a, offset);
+
         } else {
             printf("Unknown instruction: '%d'\n", token[0]);
             exit(1);
@@ -190,24 +203,17 @@ int asm_compile(Assembler* a, const char* source) {
 }
 
 lobj asm_get_entry(Assembler* a) {
-    vm_function* fn = ALLOCATE(vm_function, 1);
-    fn->obj.type = OBJ_FUNC;  // Function type
-    fn->arity = 0;  // Default to 0 arguments
     Label* l = labels_find(&a->labels, "main"); 
     if(l == NULL) {
         printf("Could not find entrypoint?\n");
         exit(0);
     }
-    fn->chunk = l->code;
-    fn->chunk_ct = l->count;
 
-    fn->values = l->constants;
-    fn->values_ct = l->constants_count;
-    fn->name = lobj_str("__main__");
-    return (lobj){ 
-        .type=LVAL_OBJ,
-        .v.obj=(vm_object*)fn
-    };
+    return lobj_func( 
+        l->code, l->count,
+        l->constants, l->constants_count,
+        l->arity, lobj_str("__main__")
+    );
 }
 
 void asm_free(Assembler* a) {
@@ -221,33 +227,64 @@ void asm_free(Assembler* a) {
 const char* add =
     "; Simple program to add two numbers (3 + 4)\n"
     "; Result should be 7                       \n"
-    ":add                                       \n"
+    ":add 0                                     \n"
     "    LOAD 1                                 \n"
     "    LOAD 2                                 \n"
     "    ADD                                    \n"
     "    RETURN                                 \n"
 
-    ":main                                     \n"
+    ":main 0                                   \n"
     "   LOAD :add                              \n"
     "   CALL 0                                 \n"
     "   HALT            ; Stop program and show result\n";
 
-int main() {
-    printf("%s\n", add);
+
+const char* add_arity_2 = 
+    "; Simple program to add two numbers (3 + 4)\n"
+    "; Result should be 7                       \n"
+    ":add 2                                     \n"
+    "   ADD                                     \n"
+    "   RETURN                                  \n"
+
+    ":main 0                                   \n"
+    "   LOAD :add                              \n"
+    "   LOAD 3                                 \n"
+    "   LOAD 4                                 \n"
+    "   CALL 2                                 \n"
+    "   RETURN                                 \n";
+
+const char* ifelse = 
+    ":main 0                                   \n"
+    "   LOAD 1                                 \n"
+    "   JMP_FALSY 3                            \n"
+    "   LOAD 4                                 \n"
+    "   RETURN                                 \n"
+    "   LOAD 3                                 \n"
+    "   RETURN                                 \n";
+   
+const char* loop =
+    ":main 0                                   \n"
+    "   LOAD 1                                 \n"
+    "   JMP_FALSY 4                            \n"
+    "   POP                                    \n"
+    "   LOOP 8                                 \n"
+    "   RETURN                                 \n";
+
+
+    ;
+int main(int argc, char** args) {
     Assembler assembler;
     asm_init(&assembler);
-    asm_compile(&assembler, add);
+    asm_compile(&assembler, loop);
     
     VM vm;
     HashTable globals, strings;
     table_create(&globals);
     table_create(&strings);
-
     lobj main = asm_get_entry(&assembler);
 
     vm_create(&vm, &globals, &strings, &main);
     vm_exec(&vm, 0);
-
     asm_free(&assembler);
     
 }
