@@ -83,7 +83,7 @@ static char* read_token(const char* source, int* pos) {
     //accumulate next token
     char* token = calloc(256, sizeof(char));
     int len = 0;
-    while(!isspace(cur) && cur != '\0') {
+    while(len < 256 && !isspace(cur) && cur != '\0') {
         token[len] = cur;
         cur=source[++(*pos)];
         len++;
@@ -91,9 +91,20 @@ static char* read_token(const char* source, int* pos) {
     if(len == 0) {
         return NULL;
     }
-    token[len] = '\0';
     //printf("%s %llu\n", token, strlen(token));
     return token;
+}
+
+// https://github.com/rustyrussell/ccan/blob/161fe383533c12b95d9117a7ab75b5d3513287b0/ccan/json/json.c#L38C1-L45C2
+static char *asm_strdup(const char *str)
+{
+	char *ret = (char*) malloc(strlen(str) + 1);
+	if (ret == NULL){
+            fprintf(stderr, "out of memory");
+	    exit(1);
+        }
+	strcpy(ret, str);
+	return ret;
 }
 
 int asm_compile(Assembler* a, const char* source) {
@@ -110,9 +121,15 @@ int asm_compile(Assembler* a, const char* source) {
         if(token == NULL) {
             continue;
         }
-        //      // Check if it's a label definition
+        // Check if it's a label definition
         if (token[0] == ':') {
-            char* tokname = strdup(token + 1);  
+            //FIX ME: 
+            if (strlen(token) == 1) {
+                fprintf(stderr, "Label must have alphanumeric characters greater than length one\n");
+                exit(1);
+            }
+            //todo, asm label might be length one, need to check
+            char* tokname = asm_strdup(token + 1);
             char* arity = read_token(source, &pos);
             labels_write(a, tokname, parse_number(arity));
             free(token); free(arity);
@@ -166,10 +183,12 @@ int asm_compile(Assembler* a, const char* source) {
             free(operand);
         } else if (strcmp(token, "GET_LOCAL") == 0) {
             write_byte(a, I_GET_LOCAL);
+            free(token);
             token = read_token(source, &pos);
             write_byte(a, parse_number(token));
         } else if (strcmp(token, "SET_LOCAL") == 0) {
             write_byte(a, I_SET_LOCAL);
+            free(token);
             token = read_token(source, &pos);
             write_byte(a, parse_number(token));
         } else if (strcmp(token, "JMP") == 0) {
@@ -220,6 +239,7 @@ void asm_free(Assembler* a) {
     // Free label names
     Label** labl;
     darray_foreach(labl, a->labels) {
+        free((*labl)->name);
         free(*labl);
     }
     darray_free(a->labels);
@@ -262,30 +282,41 @@ const char* ifelse =
     "   LOAD 3                                 \n"
     "   RETURN                                 \n";
    
-const char* loop =
+const char* infinite_loop =
     ":main 0                                   \n"
     "   LOAD 1                                 \n"
     "   JMP_FALSY 4                            \n"
     "   POP                                    \n"
-    "   LOOP 8                                 \n"
+    "   LOOP 9                                 \n"
     "   RETURN                                 \n";
 
+const char* local_variables = 
+    ":main 0                                   \n"
+    "   LOAD 1                                 \n"
+    "   LOAD 20                                \n"
+    "   ADD                                    \n"
+    "   SET_LOCAL 0                            \n"
+    "   GET_LOCAL 0                            \n"
+    "   RETURN                                 \n";
+ 
 
-    ;
 int main(int argc, char** args) {
     Assembler assembler;
     asm_init(&assembler);
-    asm_compile(&assembler, loop);
+    asm_compile(&assembler, local_variables);
     
     VM vm;
     HashTable globals, strings;
     table_create(&globals);
     table_create(&strings);
     lobj main = asm_get_entry(&assembler);
-
     vm_create(&vm, &globals, &strings, &main);
-    vm_exec(&vm, 0);
+    int result = vm_exec(&vm, 0);
+    if(result) {
+        printf("%s", vm_stacktrace(&vm));
+    }
     asm_free(&assembler);
+    vm_free(&vm);
     
 }
 

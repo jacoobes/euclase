@@ -3,27 +3,28 @@
 #include <stdlib.h>
 #include <string.h>
 #include "./lobj.h"
+#include "memory.h"
 #include "table.h"
 
 
 static int apply(VM* vm, lobj* obj, int argc) {
     if(obj->type != LVAL_OBJ) {
         puts("Object is not callable"); 
-        exit(1);
+        return 1;
     }
     if(obj->v.obj->type != 1) {
         puts("Can only call functions");
-        exit(1);
+        return 1;
     }
     vm_function* fn = (vm_function*) obj->v.obj;
     if(fn->arity != argc) {
         puts("Invalid arity of function");
-        exit(1);
+        return 1;
     }
 
     if (vm->frame_count == FRAMES_MAX) {
         puts("stack overflow");
-        exit(1);
+        return 1;
     }
     //top of call_stack is now the new function after being called
     vm->call_stack[vm->frame_count] = (CallFrame){ 
@@ -35,23 +36,39 @@ static int apply(VM* vm, lobj* obj, int argc) {
     };
     
     vm->frame_count += 1;
-    return 1;
+    return 0;
 }
 
 
 static void reset_stack(VM* vm) {
     vm->stack_top = vm->stack;
 }
+
 void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     reset_stack(vm);
     vm->frame_count=0;
     // tables should be already init'd
     vm->globals = globals;
     vm->strings = strings;
-    if(apply(vm, main, 0) != 1) {
+    if(apply(vm, main, 0) != 0) {
         printf("main fn failed");
-        exit(1);
     }
+}
+
+/*
+ * Returns a heap allocated string of stack trace.
+ */
+char* vm_stacktrace(VM* vm) {
+    int bufsize = 2056;
+    char* stack_trace = calloc(bufsize, sizeof(char));
+    for(int i = vm->frame_count-1; i != 0; i--) {
+        char* fnname = AS_STR(vm->call_stack[i].function->name)->contents;
+        int wrote = snprintf(stack_trace, sizeof stack_trace, "In %s\n", fnname);
+        if(wrote >= sizeof stack_trace) {
+            break;
+        }
+    }
+    return stack_trace;
 }
 
 void vm_push(VM *vm, lobj value) {
@@ -70,7 +87,7 @@ lobj vm_peek(VM* vm, int distance) {
 }
 
 
-void vm_exec(VM *vm, int flags) {
+int vm_exec(VM *vm, int flags) {
     // framecount will always have one, the main function
     CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; 
 
@@ -89,15 +106,16 @@ void vm_exec(VM *vm, int flags) {
                     printf("\tSTACK %d ", i); lobj_println(&vm->stack[i]);
                 }
                 puts("");
-            } return;
+            } return 0;
             case I_LOAD: {
                 int const_idx = READ_BYTE(); 
 #ifdef DEBUG
                 printf("I_LOAD "); lobj_println(&CONSTANT_AT(const_idx));
 #endif
                 if(const_idx > cur_frame->function->values_ct) {
-                    puts("const idx exceeds value count");
-                    exit(1);
+                    char* err = "const idx exceeds value count";
+                    
+                    return 1;
                 }
                 vm_push(vm, CONSTANT_AT(const_idx));
             } break;
@@ -106,8 +124,8 @@ void vm_exec(VM *vm, int flags) {
                 if (a.type == LVAL_NUM) {
                     vm_push(vm, (lobj){LVAL_NUM, {.num = -a.v.num}});
                 } else {
-                    puts("typeerror");
-                    exit(1);
+                    puts("typeerror NEGATE");
+                    return 1;
                 }
             } break;
             case I_ADD: {
@@ -117,8 +135,8 @@ void vm_exec(VM *vm, int flags) {
                     printf("ADD: "); lobj_println(&result);
                     vm_push(vm, result);
                 } else {
-                    puts("typeerror");
-                    exit(1);
+                    puts("typeerror ADD");
+                    return 1;
                 }
             } break;
             case I_SUB: {
@@ -126,8 +144,8 @@ void vm_exec(VM *vm, int flags) {
                 if (IS_NUM(a) && IS_NUM(b)) {
                     vm_push(vm, lobj_num(a.v.num - b.v.num));
                 } else {
-                    puts("typeerror");
-                    exit(1);
+                    puts("typeerror SUB");
+                    return 1;
                 }
             } break;
             case I_MUL: {
@@ -136,8 +154,8 @@ void vm_exec(VM *vm, int flags) {
 
                     vm_push(vm, lobj_num(a.v.num * b.v.num));
                 } else {
-                    puts("typeerror");
-                    exit(1);
+                    puts("typeerror MUL");
+                    return 1;
                 }
             } break;
             case I_DIV: {
@@ -145,8 +163,8 @@ void vm_exec(VM *vm, int flags) {
                 if (IS_NUM(a) && IS_NUM(b)) {
                     vm_push(vm, lobj_num(AS_NUM(a) / AS_NUM(b)));
                 } else {
-                    puts("typeerror");
-                    exit(1);
+                    puts("typeerror DIV");
+                    return 1;
                 }
             } break;
             case I_MOD: {
@@ -155,8 +173,8 @@ void vm_exec(VM *vm, int flags) {
                     lobj result = {LVAL_NUM, {.num = (int)a.v.num % (int)b.v.num}};
                     vm_push(vm, result);
                 } else {
-                    puts("typeerror");
-                    exit(1);
+                    puts("typeerror MOD");
+                    return 1;
                 }
             } break;
             case I_CALL: {
@@ -168,9 +186,9 @@ void vm_exec(VM *vm, int flags) {
                 printf("About to call function "); lobj_println(&maybe_callable);
 #endif
                 // apply: we take the maybe callable
-                if(!apply(vm, &maybe_callable, argc)) { 
+                if(apply(vm, &maybe_callable, argc)) { 
                     printf("Call failed");
-                    exit(1);
+                    return 1;
                 }
                 // afterwards, the current callstack is set to one less than previous.
                 cur_frame = &vm->call_stack[vm->frame_count - 1];
@@ -224,7 +242,7 @@ void vm_exec(VM *vm, int flags) {
                 //return from last frame
                 if(vm->frame_count == 0) {
                     vm_pop(vm);
-                    exit(0);
+                    return 0;
                 }
                 // push to top of stack
                 vm->stack_top = cur_frame->slots;
@@ -233,11 +251,13 @@ void vm_exec(VM *vm, int flags) {
             } break;
             case I_LOOP: {
                 uint16_t jump = READ_SHORT();
+                // when going backwards in the opcode, you must ensure that you account for the offset of 3 
+                // for the 2 bytes in the short and the LOOP instruction (one byte)
                 cur_frame->ip -= jump;
             } break;
             default: {
                 printf("Unknown opcode '%c', misalignment?", instruction);
-                exit(1);
+                return 1;
             }
         }
     }
@@ -248,5 +268,5 @@ void vm_exec(VM *vm, int flags) {
 }
 
 void vm_free(VM* vm) {
-    exit(1);    
+    printf("Need to manage vm memory\n");
 }

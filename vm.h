@@ -42,8 +42,6 @@ typedef struct {
     lobj* slots; //the reference to the stack that the function can use
 } CallFrame;
 
-
-
 #define DEFAULT_CALL_STACK_SIZE 256
 #define DEFAULT_NUM_LOCALS 10
 
@@ -65,7 +63,6 @@ typedef struct {
     // call stack: functions 
     CallFrame call_stack[DEFAULT_CALL_STACK_SIZE];
     int frame_count;
-    
 } VM;
 
 
@@ -87,7 +84,7 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main);
  * @param vm A pointer to the virtual machine instance to be executed.
  * @param flags An integer representing the flags used for customizing the execution of the virtual machine.
  */
-void vm_exec(VM*, int);
+int vm_exec(VM*, int);
 
 /**
  * Frees the memory associated with the given virtual machine (VM) instance.
@@ -97,4 +94,8 @@ void vm_exec(VM*, int);
  * @param vm Pointer to the VM instance to be freed.
  */
 void vm_free(VM* vm);
+
+
+char* vm_stacktrace(VM* vm);
+
 #endif //vm_h
