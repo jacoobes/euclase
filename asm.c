@@ -83,7 +83,7 @@ static char* read_token(const char* source, int* pos) {
     //accumulate next token
     char* token = calloc(256, sizeof(char));
     int len = 0;
-    while(len < 256 && !isspace(cur) && cur != '\0') {
+    while(len <= 255 && !isspace(cur) && cur != '\0') {
         token[len] = cur;
         cur=source[++(*pos)];
         len++;
