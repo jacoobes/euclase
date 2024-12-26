@@ -2,6 +2,8 @@ add_rules("mode.debug", "mode.release")
 
 target("solid-waffle")
     set_kind("static")
+
+    add_files("solid_str.c")
     add_files("lobj.c")
     add_files("memory.c")
     add_files("table.c")
@@ -28,12 +30,23 @@ target('asm')
     set_kind("binary")
     add_deps("solid-waffle")
     add_files("asm.c")
+    add_defines("DEBUG")
 
-target("test")
+target("testreader")
     set_kind("binary")
-    add_files("test.c")
+    add_files("test_reader.c")
     set_languages("c11")
     add_deps("solid-waffle")
+    set_group("test")
+
+target("teststring")
+    set_kind("binary")
+    add_files("test_solid_str.c")
+    set_languages("c11")
+    add_deps("solid-waffle")
+    set_group("test")
+   
+
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --

@@ -134,7 +134,6 @@ void test_read_all() {
         free_sexpr(exprs[i]);
     }
     free(exprs);
-
     printf("test_read_all passed!\n");
 }
 

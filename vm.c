@@ -7,16 +7,8 @@
 #include "table.h"
 
 
-static int apply(VM* vm, lobj* obj, int argc) {
-    if(obj->type != LVAL_OBJ) {
-        puts("Object is not callable"); 
-        return 1;
-    }
-    if(obj->v.obj->type != 1) {
-        puts("Can only call functions");
-        return 1;
-    }
-    vm_function* fn = (vm_function*) obj->v.obj;
+static int apply(VM* vm, vm_closure* obj, int argc) {
+    vm_function* fn = obj->fn;
     if(fn->arity != argc) {
         puts("Invalid arity of function");
         return 1;
@@ -29,7 +21,7 @@ static int apply(VM* vm, lobj* obj, int argc) {
     //top of call_stack is now the new function after being called
     vm->call_stack[vm->frame_count] = (CallFrame){ 
         .ip=fn->chunk,
-        .function=fn,
+        .closure=obj,
         // slots is the constants on the stack which this callframe can use. 
         // we set it to the beginning of where we can use it
         .slots=vm->stack_top - argc - 1 
@@ -43,34 +35,6 @@ static int apply(VM* vm, lobj* obj, int argc) {
 static void reset_stack(VM* vm) {
     vm->stack_top = vm->stack;
 }
-
-void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
-    reset_stack(vm);
-    vm->frame_count=0;
-    // tables should be already init'd
-    vm->globals = globals;
-    vm->strings = strings;
-    if(apply(vm, main, 0) != 0) {
-        printf("main fn failed");
-    }
-}
-
-/*
- * Returns a heap allocated string of stack trace.
- */
-char* vm_stacktrace(VM* vm) {
-    int bufsize = 2056;
-    char* stack_trace = calloc(bufsize, sizeof(char));
-    for(int i = vm->frame_count-1; i != 0; i--) {
-        char* fnname = AS_STR(vm->call_stack[i].function->name)->contents;
-        int wrote = snprintf(stack_trace, sizeof stack_trace, "In %s\n", fnname);
-        if(wrote >= sizeof stack_trace) {
-            break;
-        }
-    }
-    return stack_trace;
-}
-
 void vm_push(VM *vm, lobj value) {
     *vm->stack_top = value;
     vm->stack_top++;
@@ -86,13 +50,55 @@ lobj vm_peek(VM* vm, int distance) {
     return vm->stack_top[-1 - distance];
 }
 
+void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
+    reset_stack(vm);
+    vm->frame_count=0;
+    // tables should be already init'd
+    vm->globals = globals;
+    vm->strings = strings;
+
+    if(!is_closure(main)) {
+        fprintf(stderr, "Main is not callable\n");
+        exit(1);
+    }
+    vm_closure* main_closure = as_closure(main);
+    if(apply(vm, main_closure, 0) != 0) {
+        printf("main fn failed");
+    }
+}
+
+
+
+/*
+ * Returns a heap allocated string of stack trace.
+ */
+solid_str vm_stacktrace(VM* vm, char* error) {
+    solid_str stack_trace = solid_str_new(NULL);
+    printf("Error: stacktrace(frames=%d)\n", vm->frame_count);
+    for(int i = 0; i < vm->frame_count; i++) {
+        solid_str fnname = AS_STR(vm->call_stack[i].closure->fn->name)->contents;
+
+        solid_str_appends(&stack_trace, "\tIn \t");
+        solid_str_appends(&stack_trace, SOLID_STR_TO_C(fnname));
+        solid_str_appends(&stack_trace, "\n");
+
+        if(i == 0) {
+            solid_str_appends(&stack_trace,  error);
+            solid_str_appends(&stack_trace,  "\n");
+        }
+    }
+    return stack_trace;
+}
+
+
+
 
 int vm_exec(VM *vm, int flags) {
     // framecount will always have one, the main function
     CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; 
 
     #define READ_BYTE() *cur_frame->ip++
-    #define CONSTANT_AT(idx) cur_frame->function->values[idx]
+    #define CONSTANT_AT(idx) cur_frame->closure->fn->values[(idx)]
     #define READ_SHORT() \
         (cur_frame->ip += 2, \
             (uint16_t)(cur_frame->ip[-2] << 8 | cur_frame->ip[-1]))
@@ -112,9 +118,9 @@ int vm_exec(VM *vm, int flags) {
 #ifdef DEBUG
                 printf("I_LOAD "); lobj_println(&CONSTANT_AT(const_idx));
 #endif
-                if(const_idx > cur_frame->function->values_ct) {
+                if(const_idx > cur_frame->closure->fn->values_ct) {
                     char* err = "const idx exceeds value count";
-                    
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, err)));
                     return 1;
                 }
                 vm_push(vm, CONSTANT_AT(const_idx));
@@ -124,7 +130,7 @@ int vm_exec(VM *vm, int flags) {
                 if (a.type == LVAL_NUM) {
                     vm_push(vm, (lobj){LVAL_NUM, {.num = -a.v.num}});
                 } else {
-                    puts("typeerror NEGATE");
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror: Negate")));
                     return 1;
                 }
             } break;
@@ -135,7 +141,7 @@ int vm_exec(VM *vm, int flags) {
                     printf("ADD: "); lobj_println(&result);
                     vm_push(vm, result);
                 } else {
-                    puts("typeerror ADD");
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror ADD")));
                     return 1;
                 }
             } break;
@@ -144,7 +150,7 @@ int vm_exec(VM *vm, int flags) {
                 if (IS_NUM(a) && IS_NUM(b)) {
                     vm_push(vm, lobj_num(a.v.num - b.v.num));
                 } else {
-                    puts("typeerror SUB");
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror SUB")));
                     return 1;
                 }
             } break;
@@ -154,7 +160,7 @@ int vm_exec(VM *vm, int flags) {
 
                     vm_push(vm, lobj_num(a.v.num * b.v.num));
                 } else {
-                    puts("typeerror MUL");
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror MUL")));
                     return 1;
                 }
             } break;
@@ -163,7 +169,7 @@ int vm_exec(VM *vm, int flags) {
                 if (IS_NUM(a) && IS_NUM(b)) {
                     vm_push(vm, lobj_num(AS_NUM(a) / AS_NUM(b)));
                 } else {
-                    puts("typeerror DIV");
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror MUL")));
                     return 1;
                 }
             } break;
@@ -173,7 +179,7 @@ int vm_exec(VM *vm, int flags) {
                     lobj result = {LVAL_NUM, {.num = (int)a.v.num % (int)b.v.num}};
                     vm_push(vm, result);
                 } else {
-                    puts("typeerror MOD");
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror MOD")));
                     return 1;
                 }
             } break;
@@ -185,9 +191,17 @@ int vm_exec(VM *vm, int flags) {
                 printf("argc %d\n", argc);
                 printf("About to call function "); lobj_println(&maybe_callable);
 #endif
+                if(!is_closure(&maybe_callable)) {
+                    solid_str stack_trace = vm_stacktrace(vm, "Uncallable lobj");
+                    printf("%s", SOLID_STR_TO_C(stack_trace));
+                    return 1;
+                }
+                vm_closure* closure = as_closure(&maybe_callable);
                 // apply: we take the maybe callable
-                if(apply(vm, &maybe_callable, argc)) { 
-                    printf("Call failed");
+                if(apply(vm, closure, argc)) { 
+                    //strlcpy(vm->error,, sizeof vm->error);
+                    solid_str stack_trace = vm_stacktrace(vm, "Failed to call an lobj");
+                    printf("%s", SOLID_STR_TO_C(stack_trace));
                     return 1;
                 }
                 // afterwards, the current callstack is set to one less than previous.
@@ -254,6 +268,14 @@ int vm_exec(VM *vm, int flags) {
                 // when going backwards in the opcode, you must ensure that you account for the offset of 3 
                 // for the 2 bytes in the short and the LOOP instruction (one byte)
                 cur_frame->ip -= jump;
+            } break;
+            case I_CLOSURE: {
+                //pointer to existing function
+                vm_function* fn = AS_FUNC(vm_pop(vm));
+                //create new closure from existing fn
+                vm_closure* closure = vm_closure_create(fn);
+                //create lobj 
+                vm_push(vm, into_lobj(LVAL_OBJ, closure));
             } break;
             default: {
                 printf("Unknown opcode '%c', misalignment?", instruction);

@@ -7,13 +7,14 @@
 #include "reader.h"
 #include "vm.h"
 
+#define ASM_CHUNK_SIZE 256
 
 static void label_init(Label* l, char* name, int arity) { 
     l->code = NULL;
     l->arity = arity;
     l->capacity = 0;
     l->count = 0;
-    l->constants = malloc(sizeof(lobj) * 256);  // Max 256 constants
+    l->constants = malloc(sizeof(lobj) * ASM_CHUNK_SIZE); 
     l->constants_count = 0;
     l->name = name;
     l->address=l->count;
@@ -41,6 +42,7 @@ void asm_init(Assembler* a) {
     darray_init(a->labels);
 }
 
+//writing to chunk of label's code
 static void write_byte(Assembler* a, uint8_t byte) {
     Label* current_label = a->current_label;
     if (current_label->capacity < current_label->count + 1) {
@@ -61,7 +63,7 @@ static void write_uint16_t(Assembler* a, uint16_t value) {
 
 static int add_constant(Assembler* a, lobj value) {
     Label* cur = a->current_label;
-    if (cur->constants_count >= 256) {
+    if (cur->constants_count >= ASM_CHUNK_SIZE) {
         printf("Too many constants in one chunk.\n");
         exit(1);
     }
@@ -78,12 +80,14 @@ static long parse_number(const char* token) {
     }
     return value;
 }
+
+//todo, can i turn this into slices to avoid allocation?
 static char* read_token(const char* source, int* pos) {
     char cur = skip_whitespace(source, pos);
     //accumulate next token
-    char* token = calloc(256, sizeof(char));
+    char* token = calloc(ASM_CHUNK_SIZE, sizeof(char));
     int len = 0;
-    while(len <= 255 && !isspace(cur) && cur != '\0') {
+    while(len < ASM_CHUNK_SIZE-1 && !isspace(cur) && cur != '\0') {
         token[len] = cur;
         cur=source[++(*pos)];
         len++;
@@ -123,12 +127,10 @@ int asm_compile(Assembler* a, const char* source) {
         }
         // Check if it's a label definition
         if (token[0] == ':') {
-            //FIX ME: 
             if (strlen(token) == 1) {
                 fprintf(stderr, "Label must have alphanumeric characters greater than length one\n");
                 exit(1);
             }
-            //todo, asm label might be length one, need to check
             char* tokname = asm_strdup(token + 1);
             char* arity = read_token(source, &pos);
             labels_write(a, tokname, parse_number(arity));
@@ -151,9 +153,8 @@ int asm_compile(Assembler* a, const char* source) {
                     printf("Could not find label %s", tokname);
                     exit(1);
                 }
-                int constant = add_constant(
-                    a, 
-                    lobj_func(addr->code, addr->count, addr->constants, addr->constants_count, addr->arity, lobj_str(tokname)));
+                vm_function* fn = vm_function_create(addr->code, addr->count, addr->constants, addr->constants_count, addr->arity, lobj_str(tokname));
+                int constant = add_constant( a, into_lobj(LVAL_OBJ, vm_closure_create(fn)));
                 write_byte(a, constant);
             } else {
                 int value = parse_number(operand);
@@ -227,12 +228,11 @@ lobj asm_get_entry(Assembler* a) {
         printf("Could not find entrypoint?\n");
         exit(0);
     }
-
-    return lobj_func( 
-        l->code, l->count,
-        l->constants, l->constants_count,
-        l->arity, lobj_str("__main__")
-    );
+    vm_function* f = vm_function_create(
+                       l->code, l->count,
+                       l->constants, l->constants_count,
+                       l->arity, lobj_str("__main__"));
+    return into_lobj(LVAL_OBJ, vm_closure_create(f));
 }
 
 void asm_free(Assembler* a) {
@@ -256,7 +256,21 @@ const char* add =
     ":main 0                                   \n"
     "   LOAD :add                              \n"
     "   CALL 0                                 \n"
-    "   HALT            ; Stop program and show result\n";
+    "   RETURN  ; Stop program and show result\n";
+
+const char* add_arity1 =
+    "; Simple program to add two numbers (3 + 4)\n"
+    "; Result should be 7                       \n"
+    ":add 1                                     \n"
+    "    LOAD 4                                 \n"
+    "    ADD                                    \n"
+    "    RETURN                                 \n"
+
+    ":main 0                                   \n"
+    "   LOAD :add                              \n"
+    "   LOAD 3                                 \n"
+    "   CALL 1                                 \n"
+    "   RETURN  ; Stop program and show result\n";
 
 
 const char* add_arity_2 = 
@@ -300,21 +314,49 @@ const char* local_variables =
     "   RETURN                                 \n";
  
 
+const char* loop4 =
+    " ; essentially this is int i = 3;         \n"
+    " ; while(i != 0) { i--; }                 \n"
+    ":main 0                                   \n"
+    "   LOAD 3                                 \n"
+    "   SET_LOCAL 0                            \n"
+    "   JMP_FALSY 9                            \n"
+    "   POP                                    \n"
+    "   GET_LOCAL 0                            \n"
+    "   LOAD 1                                 \n"
+    "   SUB                                    \n"
+    "   LOOP 14                                \n"
+    "   RETURN                                 \n";
+
+const char* should_exit = 
+    " ; no label                               \n"
+    " :                                        \n"
+    "   RETURN                                 \n";
+
+const char* invalid_fncall = 
+    " :main 0       \n"
+    "    LOAD 0     \n"
+    "    CALL 0     \n";
+
 int main(int argc, char** args) {
     Assembler assembler;
     asm_init(&assembler);
-    asm_compile(&assembler, local_variables);
+    printf("Compiling...\n");
+    asm_compile(&assembler, invalid_fncall);
     
     VM vm;
     HashTable globals, strings;
     table_create(&globals);
     table_create(&strings);
+    printf("Finding main entry...\n");
     lobj main = asm_get_entry(&assembler);
+    printf("Found main entry...\n");
     vm_create(&vm, &globals, &strings, &main);
     int result = vm_exec(&vm, 0);
     if(result) {
-        printf("%s", vm_stacktrace(&vm));
+        
     }
+    
     asm_free(&assembler);
     vm_free(&vm);
     

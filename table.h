@@ -8,6 +8,7 @@
 // We don’t grow when the capacity is completely full.
 // Instead, we grow the array before then, when the array becomes at least 75% full.
 #define TABLE_MAX_LOAD 0.75
+#define TABLE_TOMBSTONE -651
 
 typedef struct TableEntry {
     vm_string* key;

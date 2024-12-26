@@ -72,7 +72,6 @@ void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings)
     compiler->globals=globals;
     compiler->strings=strings;
     vm_function *initial = ALLOCATE(vm_function, 1);
-    vm_function_create(initial);
 
 }
 

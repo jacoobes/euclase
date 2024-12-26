@@ -12,7 +12,7 @@ static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
     for(;;) {
         TableEntry* entry = &entries[index]; 
         if(entry->key == NULL) {
-            if (entry->value.type == LVAL_NUM && AS_NUM(entry->value)== -651) {
+            if (entry->value.type == LVAL_NUM && AS_NUM(entry->value)== TABLE_TOMBSTONE) {
                 // Empty entry.
                 return tombstone != NULL ? tombstone : entry;
             } else {
@@ -31,7 +31,7 @@ static void adjust_capacity (HashTable* tbl, int capacity) {
     TableEntry* new_entries = ALLOCATE(TableEntry, capacity);
     for(int i = 0; i < capacity; i++) {
         new_entries[i].key = NULL;
-        new_entries[i].value = lobj_num(-651);
+        new_entries[i].value = lobj_num(TABLE_TOMBSTONE);
     }
     tbl->count = 0;
     if (tbl->entries) {
@@ -71,7 +71,7 @@ int table_set(HashTable* tbl, vm_string* k, lobj v) {
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k);
     int isNewKey =maybe_entry->key == NULL;
     //increase table count
-    if (isNewKey && (IS_NUM(maybe_entry->value) && AS_NUM(maybe_entry->value) == -651)) tbl->count++;
+    if (isNewKey && (IS_NUM(maybe_entry->value) && AS_NUM(maybe_entry->value) == TABLE_TOMBSTONE)) tbl->count++;
     
     maybe_entry->key=k;
     maybe_entry->value=v;
@@ -91,7 +91,7 @@ int table_delete(HashTable* tbl, vm_string* k) {
     if(entry->key == NULL) return 0;
     //set as tombstone
     entry->key=NULL;
-    entry->value = lobj_num(-651);
+    entry->value = lobj_num(TABLE_TOMBSTONE);
     return 1;
 }
 
@@ -112,9 +112,9 @@ vm_string* table_find_string(HashTable* table, const char* chars,
     if (entry->key == NULL) {
       // Stop if we find an empty non-tombstone entry.
       // todo: if (IS_NIL(entry->value)) return NULL;
-    } else if (entry->key->len== length &&
-        entry->key->hash == hash &&
-        memcmp(entry->key->contents, chars, length) == 0) {
+    } else if (solid_strlen(&entry->key->contents) == length &&
+                            entry->key->hash == hash && 
+                            memcmp(SOLID_STR_TO_C(entry->key->contents), chars, length) == 0) {
       // We found it.
       return entry->key;
     }
