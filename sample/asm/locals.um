@@ -1,0 +1,8 @@
+:main 0                                  
+   LOAD 1                               
+   LOAD 20                             
+   ADD                                
+   SET_LOCAL 0                       
+   GET_LOCAL 0                      
+   RETURN
+

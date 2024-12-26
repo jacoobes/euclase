@@ -155,7 +155,12 @@ void lobj_print(lobj* o) {
                 solid_str contents = AS_STR(fn->name)->contents;
                 printf("func %s(arity=%d)", SOLID_STR_TO_C(contents), fn->arity);
             } break;
-            default: printf("obj, yo no se");
+            case OBJ_STR: {
+                printf("'%s'", SOLID_STR_TO_C(AS_STR(*o)->contents));
+            } break;
+            default: { 
+                printf("obj, yo no se"); 
+            } break;
         }
     } break;
     default: {

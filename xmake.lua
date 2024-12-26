@@ -20,11 +20,6 @@ target("main")
     set_languages("c11")
     add_deps("solid-waffle")
 
-target("vmtest")
-    set_kind("binary")
-    add_files("vmtest.c")
-    set_languages("c11")
-    add_deps("solid-waffle")
 
 target('asm')
     set_kind("binary")
@@ -34,18 +29,24 @@ target('asm')
 
 target("testreader")
     set_kind("binary")
-    add_files("test_reader.c")
+    add_files("test/test_reader.c")
     set_languages("c11")
     add_deps("solid-waffle")
     set_group("test")
 
 target("teststring")
     set_kind("binary")
-    add_files("test_solid_str.c")
+    add_files("test/test_solid_str.c")
     set_languages("c11")
     add_deps("solid-waffle")
     set_group("test")
    
+target("testvm")
+    set_kind("binary")
+    add_files("test/vmtest.c")
+    set_languages("c11")
+    add_deps("solid-waffle")
+    set_group("test")
 
 --
 -- If you want to known more usage about xmake, please see https://xmake.io

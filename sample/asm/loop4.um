@@ -1,0 +1,12 @@
+; essentially this is int i = 3;        
+; while(i != 0) { i--; }               
+:main 0                               
+   LOAD 3                            
+   SET_LOCAL 0                      
+   JMP_FALSY 9                     
+   POP                            
+   GET_LOCAL 0                   
+   LOAD 1                       
+   SUB                         
+   LOOP 14                    
+   RETURN                    

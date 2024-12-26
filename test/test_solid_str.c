@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "./solid_str.h"
+#include "../solid_str.h"
 // Assuming these are defined in your header file
 
 void test_solid_str_new() {

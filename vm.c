@@ -10,7 +10,7 @@
 static int apply(VM* vm, vm_closure* obj, int argc) {
     vm_function* fn = obj->fn;
     if(fn->arity != argc) {
-        puts("Invalid arity of function");
+        printf("Invalid arity of function "); lobj_println(&fn->name);
         return 1;
     }
 
