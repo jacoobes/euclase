@@ -248,10 +248,11 @@ void emit(Compiler* compiler, SExpr *expr) {
                 } else if (strcmp(symbol, "var") == 0) { //global variable
                     SExpr* varname = sexpr_list_first(rest);
                     
-                } 
+                }  else {
+                    // try function call
+                }
 
             } else if (listhead->type == SEXPR_NUMBER) {
-                compiler_addconst(compiler, lobj_num(listhead->value.number));
             } else {
             }
         }
