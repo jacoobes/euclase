@@ -102,13 +102,13 @@ typedef struct {
     LocalChart* locals_chart;
 } Compiler;
 
-void compiler_create_compileunit(Compiler* compiler) {
-    darray_append( compiler->units, (CompileUnit){ .bytes=darray_new(), .next=NULL });
+void compiler_append_unit(Compiler* compiler) {
+    darray_append( compiler->units, compileunit_create());
 }
 
 void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
     darray_init(compiler->units);
-    compiler_create_compileunit(compiler);
+    compiler_append_unit(compiler);
     LocalChart* lc = malloc(sizeof(LocalChart));
     localchart_create(lc);
 
@@ -232,7 +232,6 @@ void emit(Compiler* compiler, SExpr *expr) {
                 if(strcmp(symbol, "fn") == 0) {
                     SExpr* fndef = sexpr_list_first(rest);
                     SExpr* fnname = sexpr_list_first(fndef); SExpr* args = sexpr_list_rest(fndef);
-                    
                 } else if(strcmp(symbol, "+") == 0) {
                     emit_bin_op(compiler, I_ADD, rest);
                 } else if(strcmp(symbol, "-") == 0) {
@@ -247,7 +246,13 @@ void emit(Compiler* compiler, SExpr *expr) {
                 else if (strcmp(symbol, "let") == 0) { //locally scoped variables
                 } else if (strcmp(symbol, "var") == 0) { //global variable
                     SExpr* varname = sexpr_list_first(rest);
-                    
+                    if(varname->type!= SEXPR_SYMBOL) {
+                        printf("For var declaration, expected symbol");
+                        exit(1);
+                    }
+                    SExpr* value = sexpr_list_first(sexpr_list_rest(rest));
+                    emit(compiler,value);
+                    //todo global
                 }  else {
                     // try function call
                 }
@@ -272,9 +277,10 @@ int main(int argc, char **argv) {
 //            size_t size_read;
 //            char *buffer = read_file(filename, &size_read);
             const char* buffer = 
-            ""
-            "(fn (a) a)"
-            "";
+            "           \n"
+            "(fn (a)    \n"
+            "       a)  \n"
+            "           \n";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file
@@ -283,10 +289,31 @@ int main(int argc, char **argv) {
             size_t count;
             SExpr **exprs = read_all(buffer, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
+
+            HashTable globals, strings;
+            table_create(&globals);
+            table_create(&strings);
+
+            Compiler compiler;
+            compiler_create(&compiler, &globals, &strings);
+
+            for (size_t i = 0; i < count; i++) {
+                emit(&compiler, exprs[i]);
+            }
+            VM vm;
+            vm_create(&vm,
+                      &globals,
+                      &strings,
+                      into_lobj(LVAL_OBJ, vm_closure_create(vm_function_create(NULL, NULL, NULL, NULL, NULL, NULL)))));
+
             for(int i =0; i < count; i++) {
                 free_sexpr(exprs[i]);
             }
 
+            table_free(&globals);
+            table_free(&strings);
+            compiler_destroy(&compiler);
+ 
         } else {
             return 1;
         }
