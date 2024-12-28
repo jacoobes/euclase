@@ -81,6 +81,9 @@ static inline lobj into_lobj(LVAL ty, void* lval) {
     };
     return lo;
 };
+static inline lobj lobj_num(double x) {
+   return (lobj){.type=LVAL_NUM, .v.num = x };
+}
 
 vm_function* vm_function_create(uint8_t* initial_code,
                                 uint8_t code_ct,

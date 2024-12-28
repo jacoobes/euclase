@@ -37,58 +37,107 @@ void add_history(char *unused) {}
 
 #include "darray.h"  // Assuming you have a header file defining the darray macros and functions
 
-typedef struct {
-    darray(uint8_t) bytes;
-    HashTable* globals;
-    HashTable* strings;
-    vm_function* cur_function;
-    darray(vm_function*) functions;
-} Compiler;
 
 
-void compiler_set_cur_function(Compiler* compiler, vm_function* function) {
-    if (function == NULL) {
-        fprintf(stderr, "Error: function to be set is NULL\n");
-        exit(1);
-    }
+typedef struct Local {
+    solid_str* name;
+    size_t reg;
+    size_t depth;
+} Local;
 
-    if (function == compiler->cur_function) {
-        printf("Current function is already set\n");
-        return;
-    }
 
-    // Store the current function in the array
-    darray_push(compiler->functions, compiler->cur_function);
-    compiler->cur_function = function;
+void local_create(Local* lc, solid_str* name) {
+    lc->depth = 0;
+    lc->reg=0;
+    lc->name=name;
 }
 
-vm_function* compiler_cur_function(Compiler* compiler) {
-    return compiler->cur_function;
+void local_free(Local* lc) {
+    solid_str_free(lc->name);
+    free(lc);
+}
+
+typedef struct LocalChart {
+    int cur_depth;
+    darray(Local) locals;
+} LocalChart;
+
+void localchart_create(LocalChart* lc) {
+    lc->cur_depth = 0;
+    darray_init(lc->locals);
+}
+
+void localchart_free(LocalChart* lc) {
+    lc->cur_depth = 0;
+    darray_free(lc->locals);
+    free(lc);
+}
+
+void localchart_leave_scope(LocalChart* lc) {
+    lc->cur_depth--;
+}
+void localchart_enter_scope(LocalChart* lc) {
+    lc->cur_depth++;
+}
+
+typedef struct CompileUnit {
+    darray(uint8_t) bytes;
+    darray(lobj) constants;
+    struct CompileUnit* next;
+} CompileUnit;
+
+CompileUnit compileunit_create() {
+    CompileUnit unit;
+    unit.next=NULL;
+    darray_init(unit.bytes);
+    darray_init(unit.constants);
+    return unit;
+}
+
+
+typedef struct {
+    darray(CompileUnit) units;
+    HashTable* globals;
+    HashTable* strings;
+    LocalChart* locals_chart;
+} Compiler;
+
+void compiler_create_compileunit(Compiler* compiler) {
+    darray_append( compiler->units, (CompileUnit){ .bytes=darray_new(), .next=NULL });
 }
 
 void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
-    darray_init(compiler->bytes);
-    darray_init(compiler->functions);
+    darray_init(compiler->units);
+    compiler_create_compileunit(compiler);
+    LocalChart* lc = malloc(sizeof(LocalChart));
+    localchart_create(lc);
+
     compiler->globals=globals;
     compiler->strings=strings;
-    vm_function *initial = ALLOCATE(vm_function, 1);
-
-}
-
-void compiler_load_const(Compiler *compiler, SExpr* expr, uint8_t byte) {
-    //add expr to current vm compiling function, returning index
-    // ?
-    darray_append(compiler->bytes, byte);
-    //push index of current vm function to bytes
-    //   darray_append(compiler->bytes, idx);
 
 }
 
 void compiler_destroy(Compiler *compiler) {
-    darray_free(compiler->bytes);
+    //darray_free(compiler->bytes);
 }
 
 
+static inline CompileUnit* compiler_cur_compileunit (Compiler* compiler) {
+    return &(darray_item(compiler->units, darray_size(compiler->units)-1));
+}
+static inline int compiler_writebyte(Compiler *compiler, uint8_t byte) {
+    CompileUnit* cur_unit = compiler_cur_compileunit(compiler);
+    darray_push(cur_unit->bytes, byte);
+    return darray_size(cur_unit->bytes)-1;
+}
+
+static inline void compiler_addconst(Compiler* compiler, lobj constant) {
+    CompileUnit* cur_compileunit = compiler_cur_compileunit(compiler);
+    compiler_writebyte(compiler, I_LOAD);
+    darray_push(cur_compileunit->constants, constant);
+    compiler_writebyte(compiler, 
+        (uint8_t)(darray_size(cur_compileunit->constants)-1));
+}
 
 char* read_file(const char *filename, size_t *size_read) {
     FILE *file = fopen(filename, "r");
@@ -118,10 +167,33 @@ char* read_file(const char *filename, size_t *size_read) {
     return buffer;
 }
 
+SExpr* expect_next_form(SExprType ty, SExpr* exp, char* assertmsg) {
+    SExpr* rest = sexpr_list_rest(exp);
+    if(ty == sexpr_list_first(rest)->type) {
+        return rest;
+    }
+    fprintf(stderr, "%s\n", assertmsg);
+    exit(1);
+}
+void emit(Compiler* compiler, SExpr* sexpr);
+
+static inline void emit_bin_op(Compiler* compiler, enum Instruction op, SExpr* rest) {
+    SExpr* cur;
+    sexpr_list_foreach(cur, rest) {
+        SExpr* hd = sexpr_list_first(cur);
+        if(hd->type == SEXPR_NUMBER) {
+            compiler_addconst(compiler, lobj_num(hd->value.number));
+        } else {
+            emit(compiler, hd);
+        }
+    }
+    compiler_writebyte(compiler, op);
+}
 void emit(Compiler* compiler, SExpr *expr) {
     SExpr *cur = expr;
     switch (cur->type) {
         case SEXPR_NUMBER: {
+            compiler_addconst(compiler, lobj_num(cur->value.number));
         }
         break;
         case SEXPR_SYMBOL: {
@@ -144,26 +216,43 @@ void emit(Compiler* compiler, SExpr *expr) {
         }
         break;
         case SEXPR_LIST: {
-            SExpr *listhead = cur->value.list;
+            SExpr *listhead = sexpr_list_first(cur);
             if (listhead == NULL) {
                 printf("Error: Empty list\n");
                 exit(1);
             }
             if (listhead->type == SEXPR_SYMBOL) {
                 char *symbol = listhead->value.symbol;
+
+                SExpr* rest = sexpr_list_rest(cur); //head should be a list
                 if(strcmp(symbol, "exit") == 0) {
                     printf("Exiting...\n");
                     exit(0);
                 }
-                if(strcmp(symbol, "+") == 0) {
-                    SExpr *cur = listhead;
-
+                if(strcmp(symbol, "fn") == 0) {
+                    SExpr* fndef = sexpr_list_first(rest);
+                    SExpr* fnname = sexpr_list_first(fndef); SExpr* args = sexpr_list_rest(fndef);
+                    
+                } else if(strcmp(symbol, "+") == 0) {
+                    emit_bin_op(compiler, I_ADD, rest);
+                } else if(strcmp(symbol, "-") == 0) {
+                    emit_bin_op(compiler, I_SUB, rest);
+                } else if(strcmp(symbol, "/") == 0) {
+                    emit_bin_op(compiler, I_DIV, rest);
+                } else if(strcmp(symbol, "*") == 0) {
+                    emit_bin_op(compiler, I_MUL, rest);
+                } else if(strcmp(symbol, "%") == 0) {
+                    emit_bin_op(compiler, I_MUL, rest);
                 }
+                else if (strcmp(symbol, "let") == 0) { //locally scoped variables
+                } else if (strcmp(symbol, "var") == 0) { //global variable
+                    SExpr* varname = sexpr_list_first(rest);
+                    
+                } 
 
             } else if (listhead->type == SEXPR_NUMBER) {
-                darray_push(compiler->bytes, I_LOAD);
+                compiler_addconst(compiler, lobj_num(listhead->value.number));
             } else {
-
             }
         }
         break;
@@ -178,9 +267,13 @@ int main(int argc, char **argv) {
     /* Define them with the following Language */
     if (argc > 1 && strcmp(argv[1], "-e") == 0) {
         if (argc > 2) {
-            const char *filename = argv[2];
-            size_t size_read;
-            char *buffer = read_file(filename, &size_read);
+//            const char *filename = argv[2];
+//            size_t size_read;
+//            char *buffer = read_file(filename, &size_read);
+            const char* buffer = 
+            ""
+            "(fn (a) a)"
+            "";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file

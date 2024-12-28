@@ -29,17 +29,20 @@ char skip_whitespace(const char *input, int *pos) {
     return c;
 }
 
+inline SExpr* sexpr_number_create(double num) {
+    SExpr *expr = ALLOCATE(SExpr, 1);
+    expr->type = SEXPR_NUMBER;
+    expr->value.number = num;
+    return expr;
+}
+
 SExpr *read_number(const char *input, int sign, int *pos) {
     int64_t result = 0;
     for (char c = input[*pos]; isdigit(c); c = next(input, pos)) {
         result *= 10;
         result += c - '0';
     }
-    SExpr *expr = ALLOCATE(SExpr, 1);
-    expr->type = SEXPR_NUMBER;
-    expr->value.number = sign * result;
-    expr->next = NULL;
-    return expr;
+    return sexpr_number_create(sign*result);
 }
 
 SExpr *read_symbol(const char *input, int *pos) {
@@ -62,7 +65,6 @@ SExpr *read_symbol(const char *input, int *pos) {
         expr->type = SEXPR_SYMBOL;
         expr->value.symbol = symbol;
     }
-    expr->next = NULL;
     return expr;
 }
 
@@ -108,7 +110,6 @@ SExpr *read_string(const char *input, int *pos) {
     SExpr *expr = ALLOCATE(SExpr, 1);
     expr->type = SEXPR_STRING;
     expr->value.string = str;
-    expr->next = NULL;
     return expr;
 }
 
@@ -126,32 +127,44 @@ SExpr *read_atom(const char *input, int *pos) {
     fprintf(stderr, "Failed to read: '%c'\n", cur);
     exit(1);
 }
+inline SExpr*  sexpr_list_create() {
+    SExpr* head = ALLOCATE(SExpr, 1);
+    head->type = SEXPR_LIST;
+    head->value.cons.first = NULL;
+    head->value.cons.rest = NULL;
+    return head;
+}
+
 
 SExpr* read_list(const char* input, int* pos) {
     advance(pos); // skip the first '('
-    SExpr* head = ALLOCATE(SExpr, 1);
-    head->next = NULL;
+    SExpr* head = NULL;
     SExpr* cur = NULL;
     while(*pos < strlen(input) && input[*pos] != ')') {
         char next = skip_whitespace(input, pos);
         if(next == ')') {
             break;
-        }
+         }
         SExpr* el;
         if(next == '(') {
-            el = ALLOCATE(SExpr, 1);
-            el->type = SEXPR_LIST;
-            el->value.list = read_list(input, pos);
-            el->next = NULL;
+            el = read_list(input, pos);
         } else {
             el = read_atom(input, pos);
         }
-        if(cur == NULL) {
-            cur = el;
-            head = cur;
+
+
+        // Create new cons cell
+        SExpr* new_cons = sexpr_list_create();
+        //setting the value we found to the first one,
+        new_cons->value.cons.first = el;
+
+        // Handle first element
+        if(head == NULL) {
+            head = new_cons;
+            cur = head;
         } else {
-            cur->next = el;
-            cur = cur->next;
+            cur->value.cons.rest = new_cons;
+            cur = new_cons;
         }
     }
     if(!cur) {
@@ -175,10 +188,7 @@ SExpr **read_all(const char *input, size_t *count) {
         }
         SExpr *expr;
         if (cur == '(') {
-            expr = ALLOCATE(SExpr, 1);
-            expr->type = SEXPR_LIST;
-            expr->value.list = read_list(input, &i);
-            expr->next = NULL;
+            expr = read_list(input, &i);
         } else {
             expr = read_atom(input, &i);
         }
@@ -199,48 +209,44 @@ SExpr **read_all(const char *input, size_t *count) {
 void print_atom(SExpr *cur) {
     switch (cur->type) {
         case SEXPR_NUMBER:
-            printf("(num %f)", cur->value.number);
+            printf("%f ", cur->value.number);
         break;
         case SEXPR_SYMBOL:
-            printf("(sym `%s`)", cur->value.symbol);
+            printf("`%s `", cur->value.symbol);
         break;
         case SEXPR_STRING:
-            printf("(str \"%s\")", cur->value.string);
+            printf("\"%s\" ", cur->value.string);
         break;
         case SEXPR_LIST:
-            printf("(li ");
-            print_sexpr(cur->value.list);
-            printf(" )");
+            printf("(cons");
+                print_sexpr(cur->value.cons.first); print_sexpr(cur->value.cons.rest);
+            printf(")");
         break;
     }
 }
 
 void print_sexpr(SExpr *expr) {
     if (expr == NULL) return;
-    SExpr *cur = expr;
-    while (cur != NULL) {
-        print_atom(cur);
-        cur = cur->next;
-    }
+    print_atom(expr);
 }
 
 void free_sexpr(SExpr *expr) {
-    while(NULL != expr) {
-        switch (expr->type) {
-            case SEXPR_SYMBOL:
-                free(expr->value.symbol);
-            break;
-            case SEXPR_STRING:
-                free(expr->value.string);
-            break;
-            case SEXPR_LIST:
-                free_sexpr(expr->value.list);
-            break;
-            case SEXPR_NUMBER:
-            break;
-        }
-        SExpr *next = expr->next;
-        free(expr);
-        expr = next;
+    switch (expr->type) {
+        case SEXPR_SYMBOL:
+            free(expr->value.symbol);
+            return;
+        break;
+        case SEXPR_STRING:
+            free(expr->value.string);
+            return;
+        case SEXPR_LIST: {
+            SExpr* head = sexpr_list_first(expr);
+            free_sexpr(head);
+            SExpr* rest = sexpr_list_rest(expr);
+            if(rest != NULL) {
+                free_sexpr(rest);
+            }
+        } break;
+        case SEXPR_NUMBER: return;
     }
 }

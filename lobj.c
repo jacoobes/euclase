@@ -38,9 +38,6 @@ lobj lobj_str(const char* contents) {
 }
 
 /* Create a new number type lval */
-lobj lobj_num(double x) {
-  return (lobj){.type=LVAL_NUM, .v.num = x };
-}
 
 vm_function* vm_function_create(
     uint8_t* initial_code,

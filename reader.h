@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 
 typedef enum {
     SEXPR_NUMBER,
@@ -22,10 +23,23 @@ struct SExpr {
         double number;
         char *symbol;
         char *string;
-        SExpr *list;
+        struct {
+            SExpr* first;
+            SExpr* rest;
+        } cons;
     } value;
-    SExpr *next;
 };
+
+static inline SExpr* sexpr_list_first (SExpr* e) {
+    return e->value.cons.first;
+}
+static inline SExpr* sexpr_list_rest(SExpr* e) {
+    return e->value.cons.rest;
+}
+
+#define sexpr_list_foreach(el, cons) \
+    for ((el)=cons; (el) != NULL; (el)=sexpr_list_rest((el)))
+
 
 /**
  * Checks whether a given character can be part of an identifier.
