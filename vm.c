@@ -105,7 +105,7 @@ int vm_exec(VM *vm, int flags) {
 
     while (1) {
         uint8_t instruction;
-        switch (instruction = READ_BYTE()) {
+        switch ((instruction = READ_BYTE()) ) {
             case I_HALT: {
                 printf("HALTED:\n");
                 for(int i = 0; &vm->stack[i] != vm->stack_top; i++) {

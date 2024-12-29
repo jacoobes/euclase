@@ -97,18 +97,26 @@ CompileUnit compileunit_create() {
 
 typedef struct {
     darray(CompileUnit) units;
+    CompileUnit* current_unit;
     HashTable* globals;
     HashTable* strings;
     LocalChart* locals_chart;
 } Compiler;
 
 void compiler_append_unit(Compiler* compiler) {
-    darray_append( compiler->units, compileunit_create());
+    darray_append(compiler->units, compileunit_create());
+}
+static inline CompileUnit* compiler_peekunit (Compiler* compiler) {
+    return &(darray_item(compiler->units, darray_size(compiler->units)-1));
 }
 
+static inline CompileUnit* compiler_cur_compileunit (Compiler* compiler) {
+    return compiler->current_unit;
+}
 void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
     darray_init(compiler->units);
     compiler_append_unit(compiler);
+    compiler->current_unit=compiler_peekunit(compiler);
     LocalChart* lc = malloc(sizeof(LocalChart));
     localchart_create(lc);
 
@@ -121,10 +129,6 @@ void compiler_destroy(Compiler *compiler) {
     //darray_free(compiler->bytes);
 }
 
-
-static inline CompileUnit* compiler_cur_compileunit (Compiler* compiler) {
-    return &(darray_item(compiler->units, darray_size(compiler->units)-1));
-}
 static inline int compiler_writebyte(Compiler *compiler, uint8_t byte) {
     CompileUnit* cur_unit = compiler_cur_compileunit(compiler);
     darray_push(cur_unit->bytes, byte);
@@ -175,6 +179,7 @@ SExpr* expect_next_form(SExprType ty, SExpr* exp, char* assertmsg) {
     fprintf(stderr, "%s\n", assertmsg);
     exit(1);
 }
+
 void emit(Compiler* compiler, SExpr* sexpr);
 
 static inline void emit_bin_op(Compiler* compiler, enum Instruction op, SExpr* rest) {
@@ -232,6 +237,14 @@ void emit(Compiler* compiler, SExpr *expr) {
                 if(strcmp(symbol, "fn") == 0) {
                     SExpr* fndef = sexpr_list_first(rest);
                     SExpr* fnname = sexpr_list_first(fndef); SExpr* args = sexpr_list_rest(fndef);
+                    SExpr* body = sexpr_list_rest(rest);
+                    compiler_append_unit(compiler);
+                    
+                    SExpr* cur;
+                    sexpr_list_foreach(cur, body) {
+                        emit(compiler, cur);
+                    };
+
                 } else if(strcmp(symbol, "+") == 0) {
                     emit_bin_op(compiler, I_ADD, rest);
                 } else if(strcmp(symbol, "-") == 0) {
@@ -241,9 +254,10 @@ void emit(Compiler* compiler, SExpr *expr) {
                 } else if(strcmp(symbol, "*") == 0) {
                     emit_bin_op(compiler, I_MUL, rest);
                 } else if(strcmp(symbol, "%") == 0) {
-                    emit_bin_op(compiler, I_MUL, rest);
+                    emit_bin_op(compiler, I_MOD, rest);
                 }
                 else if (strcmp(symbol, "let") == 0) { //locally scoped variables
+                    
                 } else if (strcmp(symbol, "var") == 0) { //global variable
                     SExpr* varname = sexpr_list_first(rest);
                     if(varname->type!= SEXPR_SYMBOL) {
@@ -269,23 +283,20 @@ void emit(Compiler* compiler, SExpr *expr) {
 int main(int argc, char **argv) {
     puts("Version 0.0.0.0.3");
     puts("Press Ctrl+c to Exit\n");
-
     /* Define them with the following Language */
     if (argc > 1 && strcmp(argv[1], "-e") == 0) {
-        if (argc > 2) {
-//            const char *filename = argv[2];
-//            size_t size_read;
-//            char *buffer = read_file(filename, &size_read);
+        if (argc >= 2) {
+//          const char *filename = argv[2];
+//          size_t size_read;
+//          char *buffer = read_file(filename, &size_read);
             const char* buffer = 
-            "           \n"
-            "(fn (a)    \n"
-            "       a)  \n"
-            "           \n";
+            "(+ 1 (+ 2 3))";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file
             }
 
+            printf("%s\n", buffer);
             size_t count;
             SExpr **exprs = read_all(buffer, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
@@ -296,15 +307,21 @@ int main(int argc, char **argv) {
 
             Compiler compiler;
             compiler_create(&compiler, &globals, &strings);
-
             for (size_t i = 0; i < count; i++) {
                 emit(&compiler, exprs[i]);
             }
+
+            CompileUnit* cur = compiler_cur_compileunit(&compiler); 
             VM vm;
-            vm_create(&vm,
-                      &globals,
-                      &strings,
-                      into_lobj(LVAL_OBJ, vm_closure_create(vm_function_create(NULL, NULL, NULL, NULL, NULL, NULL)))));
+            darray_push(cur->bytes, I_RETURN);
+            printf("%zu\n", cur->bytes.size);
+            printf("%zu\n", cur->constants.size);
+            lobj main = into_lobj(LVAL_OBJ, 
+                        vm_closure_create(vm_function_create(cur->bytes.item, cur->bytes.size, 
+                                                             cur->constants.item, cur->constants.size,
+                                                             0, lobj_str("main"))));
+            vm_create(&vm, &globals, &strings, &main);
+            vm_exec(&vm, 0);
 
             for(int i =0; i < count; i++) {
                 free_sexpr(exprs[i]);
