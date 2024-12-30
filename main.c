@@ -40,20 +40,21 @@ void add_history(char *unused) {}
 
 
 typedef struct Local {
-    solid_str* name;
-    size_t reg;
+    solid_str name;
     size_t depth;
+    //can we squish this to a byte? need to bounds check locals insert check to ensure
+    size_t reg;
 } Local;
 
 
-void local_create(Local* lc, solid_str* name) {
-    lc->depth = 0;
-    lc->reg=0;
+void local_init(Local* lc, solid_str name, int depth, int reg) {
+    lc->depth = depth;
+    lc->reg=reg;
     lc->name=name;
 }
 
 void local_free(Local* lc) {
-    solid_str_free(lc->name);
+    solid_str_free(&lc->name);
     free(lc);
 }
 
@@ -69,16 +70,63 @@ void localchart_create(LocalChart* lc) {
 
 void localchart_free(LocalChart* lc) {
     lc->cur_depth = 0;
+
+    Local* l;
+    darray_foreach(l, lc->locals) {
+        solid_str_free(&l->name);
+    }
     darray_free(lc->locals);
     free(lc);
 }
 
-void localchart_leave_scope(LocalChart* lc) {
+size_t localchart_leave_scope(LocalChart* lc) {
+    if(lc->cur_depth == 0) {
+        return 0;
+    }
+
     lc->cur_depth--;
+    int removed = 0;
+    while(lc->locals.size != 0) {
+        Local* cur = &(darray_item(lc->locals, darray_size(lc->locals)-1));
+        if(cur->depth <= lc->cur_depth) break;
+        darray_pop(lc->locals);
+        removed++;
+    }
+    return removed;
 }
 void localchart_enter_scope(LocalChart* lc) {
     lc->cur_depth++;
 }
+
+size_t localchart_resolvesymbol(LocalChart* lc, char* symbol) {
+    int found = -1;
+
+    Local* local;
+    darray_foreach(local, lc->locals) {
+        if(local->depth <= lc->cur_depth && strcmp(symbol, SOLID_STR_TO_C(local->name)) == 0) {
+            found = local->reg;
+        }
+    }
+    return found;
+}
+int localchart_insert(LocalChart *lc, char* symbol) {
+    if(darray_size(lc->locals) == 256) {
+        printf("Variable overflow. Reached maximum variables per scope (256)");
+        return -1;
+    }
+    Local* local;
+    darray_foreach(local, lc->locals) {
+        if(local->depth == lc->cur_depth && strcmp(symbol, SOLID_STR_TO_C(local->name))) {
+            return -1;
+        }
+    }
+    size_t prev_size = darray_size(lc->locals);
+    Local new_local;
+    local_init(&new_local, solid_str_new(symbol), lc->cur_depth, prev_size);
+    darray_push(lc->locals, new_local);
+    return prev_size;
+}
+
 
 typedef struct CompileUnit {
     darray(uint8_t) bytes;
@@ -97,10 +145,10 @@ CompileUnit compileunit_create() {
 
 typedef struct {
     darray(CompileUnit) units;
+    LocalChart* locals_chart;
     CompileUnit* current_unit;
     HashTable* globals;
     HashTable* strings;
-    LocalChart* locals_chart;
 } Compiler;
 
 void compiler_append_unit(Compiler* compiler) {
@@ -119,7 +167,7 @@ void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings)
     compiler->current_unit=compiler_peekunit(compiler);
     LocalChart* lc = malloc(sizeof(LocalChart));
     localchart_create(lc);
-
+    compiler->locals_chart=lc;
     compiler->globals=globals;
     compiler->strings=strings;
 
@@ -186,38 +234,51 @@ static inline void emit_bin_op(Compiler* compiler, enum Instruction op, SExpr* r
     SExpr* cur;
     sexpr_list_foreach(cur, rest) {
         SExpr* hd = sexpr_list_first(cur);
-        if(hd->type == SEXPR_NUMBER) {
-            compiler_addconst(compiler, lobj_num(hd->value.number));
-        } else {
-            emit(compiler, hd);
-        }
+        emit(compiler, hd);
     }
     compiler_writebyte(compiler, op);
 }
+
+int compiler_jump_emit(Compiler* compiler, enum Instruction instruction) {
+    compiler_writebyte(compiler,instruction); //0
+    //short
+    int jmp_instruct_loc = compiler_writebyte(compiler, 0xff); //1 placeholder
+                           compiler_writebyte(compiler, 0xff); //2 placeholder
+    //end short
+    //
+    return jmp_instruct_loc;
+}
+
+void compiler_jump_patch(Compiler* compiler, size_t ushort_begin, size_t jump_loc) {
+    CompileUnit* cur_unit = compiler_cur_compileunit(compiler);
+    
+    cur_unit->bytes.item[ushort_begin] = (jump_loc >> 8) & 0xff;
+    cur_unit->bytes.item[ushort_begin+1] = jump_loc & 0xff;
+}
+
 void emit(Compiler* compiler, SExpr *expr) {
     SExpr *cur = expr;
     switch (cur->type) {
         case SEXPR_NUMBER: {
             compiler_addconst(compiler, lobj_num(cur->value.number));
-        }
-        break;
+        } break;
         case SEXPR_SYMBOL: {
             char *symbol = cur->value.symbol;
-            //auto local_index = local_chart.resolve_symbol(symbol);
-            if (symbol) {
-                //push_byte(I_GET_LOCAL);
-                //push_byte(local_index);
-            } else if (false) {
-                //push_byte(I_GET_GLOBAL );
-                //auto idx = word_mappings.at(s->lexeme);
-                //push_byte(idx);
+            size_t local_index = localchart_resolvesymbol(compiler->locals_chart,symbol);
+            if (local_index != -1) {
+                compiler_writebyte(compiler,  I_GET_LOCAL);
+                compiler_writebyte(compiler,  local_index);
             } else {
-                //throw std::runtime_error(s->lexeme + " is an unresolved symbol");
+//              push_byte(I_GET_GLOBAL );
+//              auto idx = word_mappings.at(s->lexeme);
+//              push_byte(idx);
             }
         }
         break;
         case SEXPR_STRING: {
             char *str = cur->value.string;
+            //todo: check in table for existence to reuse str object
+            compiler_addconst(compiler, lobj_str(str));
         }
         break;
         case SEXPR_LIST: {
@@ -257,7 +318,44 @@ void emit(Compiler* compiler, SExpr *expr) {
                     emit_bin_op(compiler, I_MOD, rest);
                 }
                 else if (strcmp(symbol, "let") == 0) { //locally scoped variables
-                    
+                    SExpr* bindings = sexpr_list_first(rest);
+                    int even = 1;
+                    localchart_enter_scope(compiler->locals_chart);
+
+                    SExpr* cur;
+                    sexpr_list_foreach(cur, bindings) {
+                        //empty list
+                        if(sexpr_list_first(cur) == NULL) {
+                            break;
+                        }
+                        SExpr* next = sexpr_list_rest(cur);
+                        //if uneven forms count for let declaration
+                        if(next == NULL && (even % 2 == 1)) {
+                            printf("Uneven forms in let binding\n");
+                            exit(1);
+                        }
+
+                        SExpr* lhs = sexpr_list_first(cur);
+                        SExpr* rhs = sexpr_list_first(next);
+                        emit(compiler, rhs);
+
+                        int reg = localchart_insert(compiler->locals_chart, lhs->value.symbol);
+                        compiler_writebyte(compiler, I_SET_LOCAL);
+                        compiler_writebyte(compiler, (uint8_t)reg);
+                        even+=1;
+                        cur = next;
+                    }
+                    SExpr* letbody = sexpr_list_rest(rest); 
+                    SExpr* bform;
+                    sexpr_list_foreach(bform, letbody) {
+                        emit(compiler, sexpr_list_first(bform));
+                    }
+                    int removed = localchart_leave_scope(compiler->locals_chart);
+                    printf("removed %d\n", removed);
+                    for(int i = 0; i < removed;i++ ) {
+                        //compiler_writebyte(compiler, I_POP);
+                    }
+
                 } else if (strcmp(symbol, "var") == 0) { //global variable
                     SExpr* varname = sexpr_list_first(rest);
                     if(varname->type!= SEXPR_SYMBOL) {
@@ -267,8 +365,41 @@ void emit(Compiler* compiler, SExpr *expr) {
                     SExpr* value = sexpr_list_first(sexpr_list_rest(rest));
                     emit(compiler,value);
                     //todo global
-                }  else {
-                    // try function call
+                }  else if (strcmp(symbol, "if") == 0) {
+                    #define BYTELEN \
+                        (darray_size(compiler_cur_compileunit(compiler)->bytes))
+                    //condition
+                    emit(compiler, sexpr_list_first(rest));
+                    // emit a jmp if falsy
+                    int ushort_start = compiler_jump_emit(compiler, I_JMP_FALSY);
+                    // we get the length of bytes after jmp emitted,
+                    int cursize = BYTELEN;
+                    rest = sexpr_list_rest(rest);
+
+                    //true val
+                    emit(compiler, sexpr_list_first(rest));
+                    int ushort_true = compiler_jump_emit(compiler, I_JMP);
+                    // we can patch the jmp needed after processing truth branch by getting difference 
+                    // (length after processing truthy branch) - (length before) 
+                    int jmpfalse_location = BYTELEN - cursize ; 
+
+
+                    cursize = BYTELEN;
+                    //false val
+                    emit(compiler, sexpr_list_first(sexpr_list_rest(rest)));
+                    size_t cur_location = BYTELEN - cursize;
+
+                    compiler_jump_patch(compiler, ushort_start, jmpfalse_location);
+                    compiler_jump_patch(compiler, ushort_true, cur_location);
+
+                    #undef BYTELEN
+
+                } else if (strcmp(symbol, "or") == 0) {
+
+                } else if (strcmp(symbol, "while") == 0) {
+
+                } else {
+
                 }
 
             } else if (listhead->type == SEXPR_NUMBER) {
@@ -289,8 +420,7 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* buffer = 
-            "(+ 1 (+ 2 3))";
+            const char* buffer = "(if false 0 1)";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file
@@ -314,8 +444,6 @@ int main(int argc, char **argv) {
             CompileUnit* cur = compiler_cur_compileunit(&compiler); 
             VM vm;
             darray_push(cur->bytes, I_RETURN);
-            printf("%zu\n", cur->bytes.size);
-            printf("%zu\n", cur->constants.size);
             lobj main = into_lobj(LVAL_OBJ, 
                         vm_closure_create(vm_function_create(cur->bytes.item, cur->bytes.size, 
                                                              cur->constants.item, cur->constants.size,

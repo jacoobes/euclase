@@ -107,7 +107,18 @@ void test_read_list() {
     free_sexpr(expr);
     printf("test_read_list passed!\n");
 }
+void test_read_empty_list() {
+    printf("Begin read empty list\n");
+    int pos = 0;
+    const char *input = "()";
+    SExpr *expr = read_list(input, &pos);
+    // Check the outer list
+    printf("expr is a LIST\n");
+    assert(expr != NULL);
+    assert (expr->type == SEXPR_LIST );
+    printf("done: expr is a LIST\n");
 
+}
 //void test_read_all() {
 //    printf("Testing nested list!\n");
 //    const char *input = "(+ 1 2) (- 3 4)";
@@ -211,6 +222,7 @@ int main() {
     test_read_symbol();
     test_read_string();
     test_read_list();
+    test_read_empty_list();
     //test_read_all();
     //test_read_nested_list();
 

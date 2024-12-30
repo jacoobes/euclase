@@ -38,7 +38,7 @@ static inline SExpr* sexpr_list_rest(SExpr* e) {
 }
 
 #define sexpr_list_foreach(el, cons) \
-    for ((el)=cons; (el) != NULL; (el)=sexpr_list_rest((el)))
+    for ((el)=cons; ((el) != NULL); (el)=sexpr_list_rest((el)))
 
 
 /**

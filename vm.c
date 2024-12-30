@@ -277,6 +277,23 @@ int vm_exec(VM *vm, int flags) {
                 //create lobj 
                 vm_push(vm, into_lobj(LVAL_OBJ, closure));
             } break;
+            //TODO: test
+            case I_GET_GLOBAL: {
+                lobj v;
+                if(!table_get(vm->globals, AS_STR(vm_peek(vm, 0)), &v)) {
+                    //variable not found
+                    return 1;
+                }
+                vm_pop(vm);
+                vm_push(vm, v);
+            } break;
+            //TODO: test
+            case I_SET_GLOBAL: {
+                vm_string* name = AS_STR(vm_peek(vm, 0));
+                vm_pop(vm);
+                table_set(vm->globals, name, vm_peek(vm, 0));
+                vm_pop(vm);
+            } break;
             default: {
                 printf("Unknown opcode '%c', misalignment?", instruction);
                 return 1;

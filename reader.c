@@ -167,11 +167,12 @@ SExpr* read_list(const char* input, int* pos) {
             cur = new_cons;
         }
     }
-    if(!cur) {
-        return head;
-    }
     skip_whitespace(input, pos);
     advance(pos);
+    if(!cur) {
+        return sexpr_list_create();
+    }
+
     return head;
 }
 
@@ -241,7 +242,9 @@ void free_sexpr(SExpr *expr) {
             return;
         case SEXPR_LIST: {
             SExpr* head = sexpr_list_first(expr);
-            free_sexpr(head);
+            if(head != NULL) {
+                free_sexpr(head);
+            }
             SExpr* rest = sexpr_list_rest(expr);
             if(rest != NULL) {
                 free_sexpr(rest);
