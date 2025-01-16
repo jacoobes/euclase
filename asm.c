@@ -299,7 +299,7 @@ const char* ifelse =
 const char* infinite_loop =
     ":main 0                                   \n"
     "   LOAD 1                                 \n"
-    "   JMP_FALSY 4                            \n"
+    "   JMP_FALSY 6                            \n"
     "   POP                                    \n"
     "   LOOP 9                                 \n"
     "   RETURN                                 \n";
@@ -342,7 +342,7 @@ int main(int argc, char** args) {
     Assembler assembler;
     asm_init(&assembler);
     printf("Compiling...\n");
-    asm_compile(&assembler, invalid_fncall);
+    asm_compile(&assembler, infinite_loop);
     
     VM vm;
     HashTable globals, strings;

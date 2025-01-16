@@ -174,7 +174,7 @@ void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings)
 }
 
 void compiler_destroy(Compiler *compiler) {
-    //darray_free(compiler->bytes);
+    localchart_free(compiler->locals_chart);
 }
 
 static inline int compiler_writebyte(Compiler *compiler, uint8_t byte) {
@@ -255,24 +255,28 @@ void compiler_jump_patch(Compiler* compiler, size_t ushort_begin, size_t jump_lo
     cur_unit->bytes.item[ushort_begin] = (jump_loc >> 8) & 0xff;
     cur_unit->bytes.item[ushort_begin+1] = jump_loc & 0xff;
 }
+void compiler_write_ushort(Compiler* compiler, unsigned short jump_loc) {
+    CompileUnit* cur_unit = compiler_cur_compileunit(compiler);
+    darray_push(cur_unit->bytes, (jump_loc >> 8) & 0xff );
+    darray_push(cur_unit->bytes, jump_loc & 0xff);
+}
 
 void emit(Compiler* compiler, SExpr *expr) {
     SExpr *cur = expr;
     switch (cur->type) {
-        case SEXPR_NUMBER: {
-            compiler_addconst(compiler, lobj_num(cur->value.number));
-        } break;
+        case SEXPR_NUMBER: { compiler_addconst(compiler, lobj_num(cur->value.number)); } break;
         case SEXPR_SYMBOL: {
             char *symbol = cur->value.symbol;
+                
             size_t local_index = localchart_resolvesymbol(compiler->locals_chart,symbol);
             if (local_index != -1) {
                 compiler_writebyte(compiler,  I_GET_LOCAL);
                 compiler_writebyte(compiler,  local_index);
             } else {
-//              push_byte(I_GET_GLOBAL );
-//              auto idx = word_mappings.at(s->lexeme);
-//              push_byte(idx);
+                compiler_addconst(compiler, lobj_str(symbol));
+                compiler_writebyte(compiler,I_GET_GLOBAL);
             }
+            
         }
         break;
         case SEXPR_STRING: {
@@ -364,7 +368,10 @@ void emit(Compiler* compiler, SExpr *expr) {
                     }
                     SExpr* value = sexpr_list_first(sexpr_list_rest(rest));
                     emit(compiler,value);
-                    //todo global
+
+                    lobj v;
+                    compiler_addconst(compiler, lobj_str(varname->value.symbol));
+                    compiler_writebyte(compiler, I_SET_GLOBAL);
                 }  else if (strcmp(symbol, "if") == 0) {
                     #define BYTELEN \
                         (darray_size(compiler_cur_compileunit(compiler)->bytes))
@@ -381,7 +388,7 @@ void emit(Compiler* compiler, SExpr *expr) {
                     int ushort_true = compiler_jump_emit(compiler, I_JMP);
                     // we can patch the jmp needed after processing truth branch by getting difference 
                     // (length after processing truthy branch) - (length before) 
-                    int jmpfalse_location = BYTELEN - cursize ; 
+                    int jmpfalse_location = BYTELEN - cursize; 
 
 
                     cursize = BYTELEN;
@@ -393,13 +400,37 @@ void emit(Compiler* compiler, SExpr *expr) {
                     compiler_jump_patch(compiler, ushort_true, cur_location);
 
                     #undef BYTELEN
-
                 } else if (strcmp(symbol, "or") == 0) {
 
                 } else if (strcmp(symbol, "while") == 0) {
 
-                } else {
+                    #define BYTELEN \
+                        (darray_size(compiler_cur_compileunit(compiler)->bytes))
 
+                    //condition
+                    emit(compiler, sexpr_list_first(rest));
+                    int loop_back_loc = BYTELEN;
+                    int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY); // returns where the ushort begins +2
+
+                    compiler_writebyte(compiler, I_POP);  
+                    rest = sexpr_list_rest(rest);
+                    emit(compiler, sexpr_list_first(rest)); 
+                    compiler_writebyte(compiler, I_LOOP); 
+                    compiler_write_ushort(compiler, BYTELEN - loop_back_loc + 2); 
+                    compiler_jump_patch(compiler, ushort_begin, BYTELEN-ushort_begin-2);
+                    #undef BYTELEN
+
+                } else if(symbol[0] == '@')  {
+                    char* ident = symbol+1;
+                    size_t local_index = localchart_resolvesymbol(compiler->locals_chart,ident);
+                    if (local_index != -1) {
+                        SExpr* new_value = sexpr_list_first(rest);
+                        emit(compiler, new_value);
+                        compiler_writebyte(compiler, I_SET_LOCAL);
+                        compiler_writebyte(compiler, local_index);
+                    } else {
+                        //todo: string intern, check for existence
+                    }
                 }
 
             } else if (listhead->type == SEXPR_NUMBER) {
@@ -420,7 +451,8 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* buffer = "(if false 0 1)";
+            const char* program_add = "(+ 1 3)";
+            const char* buffer = "(let (a 5) (while a (@a (- a 1))))";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file

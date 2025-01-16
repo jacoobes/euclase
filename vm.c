@@ -148,6 +148,9 @@ int vm_exec(VM *vm, int flags) {
             case I_SUB: {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (IS_NUM(a) && IS_NUM(b)) {
+#ifdef DEBUG
+                    printf("SUB: "); lobj_println(&b);
+#endif
                     vm_push(vm, lobj_num(a.v.num - b.v.num));
                 } else {
                     printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror SUB")));
@@ -265,6 +268,9 @@ int vm_exec(VM *vm, int flags) {
             } break;
             case I_LOOP: {
                 uint16_t jump = READ_SHORT();
+#ifdef DEBUG
+                printf("I_LOOP %zu\n", jump);
+#endif
                 // when going backwards in the opcode, you must ensure that you account for the offset of 3 
                 // for the 2 bytes in the short and the LOOP instruction (one byte)
                 cur_frame->ip -= jump;
@@ -277,7 +283,7 @@ int vm_exec(VM *vm, int flags) {
                 //create lobj 
                 vm_push(vm, into_lobj(LVAL_OBJ, closure));
             } break;
-            //TODO: test
+            //TODO: string interning
             case I_GET_GLOBAL: {
                 lobj v;
                 if(!table_get(vm->globals, AS_STR(vm_peek(vm, 0)), &v)) {
@@ -287,10 +293,9 @@ int vm_exec(VM *vm, int flags) {
                 vm_pop(vm);
                 vm_push(vm, v);
             } break;
-            //TODO: test
+            //TODO: string interning
             case I_SET_GLOBAL: {
-                vm_string* name = AS_STR(vm_peek(vm, 0));
-                vm_pop(vm);
+                vm_string* name = AS_STR(vm_pop(vm));
                 table_set(vm->globals, name, vm_peek(vm, 0));
                 vm_pop(vm);
             } break;

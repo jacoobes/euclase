@@ -1,6 +1,5 @@
 
-void test_emit_bin_op() {
-
+void test_bin() {
 }
 
 

@@ -7,7 +7,7 @@
 #include <ctype.h>
 
 bool is_identifier_char(const char c) {
-    return isalnum(c) || c == '_' || c == '-' || c == '+' || c == '*' || c == '/' || c == '<' || c == '>' || c == '=';
+    return isalnum(c) || c == '_' || c == '-' || c == '+' || c == '*' || c == '/' || c == '<' || c == '>' || c == '=' || c == '@';
 }
 
 void ignore_spaces(const char *input, int *pos) {

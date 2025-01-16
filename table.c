@@ -61,13 +61,11 @@ int table_set(HashTable* tbl, vm_string* k, lobj v) {
     if(tbl->count + 1 > tbl->capacity * TABLE_MAX_LOAD) {
         int new_cap = MAX(11, tbl->capacity*2);
 #if DEBUG
-        printf("Adjusting capacity\n");
-        printf("%d\n", new_cap);
+        printf("Adjusting capacity, new cap = %d\n", new_cap);
 #endif
         adjust_capacity(tbl, new_cap);
         //realloc ruins our bucket locations. we need to resize and put items in the right spots.
     }
-    
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k);
     int isNewKey =maybe_entry->key == NULL;
     //increase table count
@@ -97,7 +95,6 @@ int table_delete(HashTable* tbl, vm_string* k) {
 
 void table_create(HashTable* tbl) {
     tbl->count = 0;
-    //using java's default initial cap
     tbl->capacity=0; 
     tbl->entries=NULL;
 }
