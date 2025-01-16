@@ -12,7 +12,7 @@ static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
     for(;;) {
         TableEntry* entry = &entries[index]; 
         if(entry->key == NULL) {
-            if (entry->value.type == LVAL_NUM && AS_NUM(entry->value)== TABLE_TOMBSTONE) {
+            if (entry->value.type == LVAL_NUM && AS_NUM(entry->value) == TABLE_TOMBSTONE) {
                 // Empty entry.
                 return tombstone != NULL ? tombstone : entry;
             } else {
@@ -45,7 +45,7 @@ static void adjust_capacity (HashTable* tbl, int capacity) {
             dest->value = old_entry->value;
             tbl->count++;
 #if DEBUG
-            printf("old entry moved to new entry in hash table\n");
+            //printf("old entry moved to new entry in hash table\n");
 #endif
 
         }
@@ -56,18 +56,19 @@ static void adjust_capacity (HashTable* tbl, int capacity) {
 }
 
 // linear probing
-// fnv-1a algo
 int table_set(HashTable* tbl, vm_string* k, lobj v) {
     if(tbl->count + 1 > tbl->capacity * TABLE_MAX_LOAD) {
         int new_cap = MAX(11, tbl->capacity*2);
 #if DEBUG
         printf("Adjusting capacity, new cap = %d\n", new_cap);
 #endif
-        adjust_capacity(tbl, new_cap);
+
         //realloc ruins our bucket locations. we need to resize and put items in the right spots.
+        adjust_capacity(tbl, new_cap);
     }
+
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k);
-    int isNewKey =maybe_entry->key == NULL;
+    int isNewKey = maybe_entry->key == NULL;
     //increase table count
     if (isNewKey && (IS_NUM(maybe_entry->value) && AS_NUM(maybe_entry->value) == TABLE_TOMBSTONE)) tbl->count++;
     
@@ -79,18 +80,23 @@ int table_set(HashTable* tbl, vm_string* k, lobj v) {
 int table_get(HashTable* tbl, vm_string* k, lobj* v) {
     if (tbl->count == 0) return 0;
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k); 
+    if(maybe_entry->key == NULL) {
+        return false;
+    }
     *v = maybe_entry->value;
     return 1;
 }
 
 int table_delete(HashTable* tbl, vm_string* k) {
-    if(tbl->count == 0) return 0;
+    if(tbl->count == 0) 
+        return false;
     TableEntry* entry = find_entry(tbl->entries, tbl->capacity, k);
-    if(entry->key == NULL) return 0;
+    if(entry->key == NULL) 
+        return false;
     //set as tombstone
     entry->key=NULL;
     entry->value = lobj_num(TABLE_TOMBSTONE);
-    return 1;
+    return true;
 }
 
 void table_create(HashTable* tbl) {
@@ -99,19 +105,18 @@ void table_create(HashTable* tbl) {
     tbl->entries=NULL;
 }
 
-vm_string* table_find_string(HashTable* table, const char* chars,
-                           int length, uint32_t hash) {
+vm_string* table_find_string(HashTable* table, solid_str* ss, uint32_t hash) {
   if (table->count == 0) return NULL;
 
   uint32_t index = hash % table->capacity;
   for (;;) {
     TableEntry* entry = &table->entries[index];
     if (entry->key == NULL) {
-      // Stop if we find an empty non-tombstone entry.
-      // todo: if (IS_NIL(entry->value)) return NULL;
-    } else if (solid_strlen(&entry->key->contents) == length &&
-                            entry->key->hash == hash && 
-                            memcmp(SOLID_STR_TO_C(entry->key->contents), chars, length) == 0) {
+      if(AS_NUM(entry->value) == TABLE_TOMBSTONE) { 
+            return NULL;
+      }
+    } else if ((solid_strcmp(ss, &entry->key->contents) == 0)
+                && entry->key->hash == hash) {
       // We found it.
       return entry->key;
     }

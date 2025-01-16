@@ -3,9 +3,8 @@
 #include <stdlib.h>
 #include "./vm.h"
 #include "lobj.h"
-#include "memory.h"
+#include <limits.h>
 #include <string.h>
-#include <ctype.h>
 #include <stdbool.h>
 #include "reader.h"
 /* If we are compiling on Windows compile these functions */
@@ -36,6 +35,14 @@ void add_history(char *unused) {}
 
 
 #include "darray.h"  // Assuming you have a header file defining the darray macros and functions
+
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <limits.h>
+#endif
 
 
 
@@ -445,20 +452,21 @@ void emit(Compiler* compiler, SExpr *expr) {
 int main(int argc, char **argv) {
     puts("Version 0.0.0.0.3");
     puts("Press Ctrl+c to Exit\n");
-    /* Define them with the following Language */
+    
     if (argc > 1 && strcmp(argv[1], "-e") == 0) {
         if (argc >= 2) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
             const char* program_add = "(+ 1 3)";
-            const char* buffer = "(let (a 5) (while a (@a (- a 1))))";
+            const char* buffer = "(var a 10) \n"  
+                                 "(+ a a)";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file
             }
 
-            printf("%s\n", buffer);
+            printf("program:\n '%s'\n", buffer);
             size_t count;
             SExpr **exprs = read_all(buffer, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
@@ -513,6 +521,7 @@ int main(int argc, char **argv) {
             compiler_create(&compiler, &globals, &strings);
 
             for (size_t i = 0; i < count; i++) {
+                printf("Emitting bytecode for form:"); print_sexpr(exprs[i]);
                 emit(&compiler, exprs[i]);
             }
             //VM vm;

@@ -56,6 +56,13 @@ target("testcompiler")
     add_deps("solid-waffle")
     set_group("test")
 
+target("testtable")
+    set_kind("binary")
+    add_files("test/test_table.c")
+    set_languages("c11")
+    add_deps("solid-waffle")
+    set_group("test")
+
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --
