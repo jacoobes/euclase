@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "./lobj.h"
-#include "memory.h"
 #include "table.h"
 
 
@@ -283,7 +282,6 @@ int vm_exec(VM *vm, int flags) {
                 //create lobj 
                 vm_push(vm, into_lobj(LVAL_OBJ, closure));
             } break;
-            //TODO: string interning
             case I_GET_GLOBAL: {
                 lobj peek_vl = vm_peek(vm, 0); 
                 vm_string *name = AS_STR(peek_vl);
@@ -291,12 +289,13 @@ int vm_exec(VM *vm, int flags) {
                 printf("GET GLOBAL "); lobj_println(&peek_vl);
 #endif
                 vm_string* dupe = table_find_string(vm->strings, &name->contents, name->hash);
+
                 if(dupe) {
-                    printf("found interned string");
+                    //printf("found interned string");
                     name=dupe;
                 }
                 lobj v;
-                if(!table_get(vm->globals, AS_STR(peek_vl), &v)) {
+                if(!table_get(vm->globals, name, &v)) {
                     printf("variable not found");
                     //variable not found
                     return 1;
@@ -309,9 +308,10 @@ int vm_exec(VM *vm, int flags) {
                 vm_string* name = AS_STR(val);
                 vm_string* dupe = table_find_string(vm->strings, &name->contents, name->hash);
                 if(dupe) {
-                    printf("found interned string");
                     name=dupe;
-                }               
+                } else {
+                    table_set(vm->strings, name, lobj_num(true));
+                }
                 table_set(vm->globals, name, vm_peek(vm, 0));
                 vm_pop(vm);
             } break;

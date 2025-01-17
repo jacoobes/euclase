@@ -36,6 +36,15 @@ static inline SExpr* sexpr_list_first (SExpr* e) {
 static inline SExpr* sexpr_list_rest(SExpr* e) {
     return e->value.cons.rest;
 }
+static inline int sexpr_list_len(SExpr* hd) {
+    int i = 0;
+    SExpr* cur = hd;
+    while(cur != NULL) {
+        i++;
+        cur = sexpr_list_rest(cur);
+    }
+    return i;
+}
 
 #define sexpr_list_foreach(el, cons) \
     for ((el)=cons; ((el) != NULL); (el)=sexpr_list_rest((el)))

@@ -1,5 +1,4 @@
 #include "solid_str.h"
-#include "memory.h"
 #include <stdio.h>
 
 

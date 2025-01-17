@@ -113,12 +113,19 @@ vm_string* table_find_string(HashTable* table, solid_str* ss, uint32_t hash) {
     TableEntry* entry = &table->entries[index];
     if (entry->key == NULL) {
       if(AS_NUM(entry->value) == TABLE_TOMBSTONE) { 
+            //printf("tombstone");
             return NULL;
       }
-    } else if ((solid_strcmp(ss, &entry->key->contents) == 0)
-                && entry->key->hash == hash) {
+      //printf("null key\n");
+    } else if ((solid_strcmp(ss, &entry->key->contents) == 0) && entry->key->hash == hash) {
+        //printf("Found!");
       // We found it.
       return entry->key;
+    } else {
+        //printf("%s\n", SOLID_STR_TO_C(entry->key->contents));
+        //printf("?!");
+        printf("Unable to find table_string");
+        exit(1);
     }
     index = (index + 1) % table->capacity;
   }
