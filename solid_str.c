@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 
-solid_str solid_str_new(char* startbuf) {
+solid_str solid_str_new(const char* startbuf) {
     darray_char s = darray_new();
     if(startbuf == NULL) {
         return (solid_str){.length=0,  .vec=s };

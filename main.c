@@ -29,19 +29,16 @@ void add_history(char *unused) {}
 #include <editline/readline.h>
 #include <editline/history.h>
 #endif//_WIN32
-#include "reader.h"
 
 
 #include "darray.h"  // Assuming you have a header file defining the darray macros and functions
-
-
 
 
 typedef struct Local {
     solid_str name;
     size_t depth;
     //can we squish this to a byte? need to bound check locals insert check to ensure
-    size_t reg;
+    int reg;
 } Local;
 
 
@@ -50,7 +47,11 @@ void local_init(Local* lc, const solid_str name, const int depth, const int reg)
     lc->reg=reg;
     lc->name=name;
 }
-
+Local local_create(const solid_str name, const int depth, const int reg) {
+    Local ret;
+    local_init(&ret, name, depth, reg);
+    return ret;
+}
 void local_free(Local* lc) {
     solid_str_free(&lc->name);
     free(lc);
@@ -61,9 +62,15 @@ typedef struct LocalChart {
     darray(Local) locals;
 } LocalChart;
 
-void localchart_create(LocalChart* lc) {
+void localchart_init(LocalChart* lc) {
     lc->cur_depth = 0;
     darray_init(lc->locals);
+}
+LocalChart localchart_create() {
+    LocalChart lc;
+
+    localchart_init(&lc);
+    return lc;
 }
 
 void localchart_free(LocalChart* lc) {
@@ -85,7 +92,7 @@ size_t localchart_leave_scope(LocalChart* lc) {
     lc->cur_depth--;
     int removed = 0;
     while(lc->locals.size != 0) {
-        Local* cur = &(darray_item(lc->locals, darray_size(lc->locals)-1));
+        const Local* cur = &(darray_item(lc->locals, darray_size(lc->locals)-1));
         if(cur->depth <= lc->cur_depth) break;
         darray_pop(lc->locals);
         removed++;
@@ -96,8 +103,8 @@ void localchart_enter_scope(LocalChart* lc) {
     lc->cur_depth++;
 }
 
-size_t localchart_resolvesymbol(const LocalChart* lc, char* symbol) {
-    size_t found = -1;
+int localchart_resolvesymbol(const LocalChart* lc, const char* symbol) {
+    int found = -1;
 
     Local* local;
     darray_foreach(local, lc->locals) {
@@ -107,20 +114,19 @@ size_t localchart_resolvesymbol(const LocalChart* lc, char* symbol) {
     }
     return found;
 }
-size_t localchart_insert(LocalChart *lc, char* symbol) {
+int localchart_insert(LocalChart *lc, char* symbol) {
     if(darray_size(lc->locals) == 256) {
         printf("Variable overflow. Reached maximum variables per scope (256)");
         return -1;
     }
     Local* local;
     darray_foreach(local, lc->locals) {
-        if(local->depth == lc->cur_depth && strcmp(symbol, SOLID_STR_TO_C(local->name)) != 0) {
+        if(local->depth == lc->cur_depth && strcmp(symbol, SOLID_STR_TO_C(local->name)) == 0) {
             return -1;
         }
     }
-    size_t prev_size = darray_size(lc->locals);
-    Local new_local;
-    local_init(&new_local, solid_str_new(symbol), lc->cur_depth, prev_size);
+    const int prev_size = darray_size(lc->locals);
+    const Local new_local = local_create(solid_str_new(symbol), lc->cur_depth, prev_size);
     darray_push(lc->locals, new_local);
     return prev_size;
 }
@@ -129,6 +135,7 @@ size_t localchart_insert(LocalChart *lc, char* symbol) {
 typedef struct CompileUnit {
     darray(uint8_t) bytes;
     darray(lobj) constants;
+    LocalChart locals_chart;
     //owned: need to free this
     char* name;
     int arity;
@@ -137,25 +144,31 @@ typedef struct CompileUnit {
 
 // name is duplicated, need to manage memory
 CompileUnit compileunit_create(const char* name, const int arity) {
+    LocalChart lc = localchart_create();
+    // add function name to the 0th slot in locals
+    darray_push(lc.locals, local_create(solid_str_new(name), 0, 0));
     return (CompileUnit){
         .next=NULL,
         .bytes=darray_new(),
         .constants=darray_new(),
         .name=strdup(name),
-        .arity=arity
+        .arity=arity,
+        .locals_chart = lc
     };
+}
+void compileunit_free(CompileUnit* cu) {
+    // TODO
 }
 
 
 typedef struct {
     darray(CompileUnit) units;
-    LocalChart* locals_chart;
     CompileUnit* current_unit;
     HashTable* globals;
     HashTable* strings;
 } Compiler;
 
-void compiler_append_unit(Compiler* compiler, char* name, int arity) {
+void compiler_append_unit(Compiler* compiler, const char* name, const int arity) {
     darray_append(compiler->units, compileunit_create(name, arity));
 
 }
@@ -178,10 +191,6 @@ void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings)
     darray_init(compiler->units);
     compiler_append_unit(compiler, "__main__", 0);
     compiler->current_unit= &darray_item(compiler->units, 0);
-    LocalChart* lc = malloc(sizeof(LocalChart));
-
-    localchart_create(lc);
-    compiler->locals_chart=lc;
 
     compiler->globals=globals;
     compiler->strings=strings;
@@ -189,10 +198,10 @@ void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings)
 }
 
 void compiler_destroy(const Compiler *compiler) {
-    localchart_free(compiler->locals_chart);
     CompileUnit* cu;
     darray_foreach(cu, compiler->units) {
         free(cu->name);
+        //localchart_free(cu->locals_chart);
     }
 }
 
@@ -204,7 +213,7 @@ static inline int compiler_writebyte(const Compiler *compiler, uint8_t byte) {
 
 
 
-static inline void compiler_addconst(Compiler* compiler, lobj constant) {
+static inline void compiler_addconst(const Compiler* compiler, lobj constant) {
     CompileUnit* cur_compileunit = compiler_cur_compileunit(compiler);
     compiler_writebyte(compiler, I_LOAD);
 #ifdef DEBUG
@@ -243,12 +252,12 @@ char* read_file(const char *filename, size_t *size_read) {
     return buffer;
 }
 
-SExpr* expect_next_form(SExprType ty, SExpr* exp, char* assertmsg) {
+SExpr* expect_next_form(SExprType ty, SExpr* exp, char* assert_msg) {
     SExpr* rest = sexpr_list_rest(exp);
     if(ty == sexpr_list_first(rest)->type) {
         return rest;
     }
-    fprintf(stderr, "%s\n", assertmsg);
+    fprintf(stderr, "%s\n", assert_msg);
     exit(1);
 }
 
@@ -263,7 +272,7 @@ static inline void emit_bin_op(Compiler* compiler, enum Instruction op, SExpr* r
     compiler_writebyte(compiler, op);
 }
 
-int compiler_jump_emit(Compiler* compiler, enum Instruction instruction) {
+int compiler_jump_emit(const Compiler* compiler, enum Instruction instruction) {
     compiler_writebyte(compiler,instruction); //0
     //short
     int jmp_instruct_loc = compiler_writebyte(compiler, 0xff); //1 placeholder
@@ -295,10 +304,13 @@ void emit(Compiler* compiler, SExpr *expr) {
             compiler_addconst(compiler, snum);
         } break;
         case SEXPR_SYMBOL: {
-            char *symbol = cur->value.symbol;
+            const char *symbol = cur->value.symbol;
 
-            const size_t local_index = localchart_resolvesymbol(compiler->locals_chart,symbol);
+            const int local_index = localchart_resolvesymbol(&compiler->current_unit->locals_chart,symbol);
             if (local_index != -1) {
+#ifdef DEBUG
+                printf("emitting symbol: I_GET_LOCAL %s, %d\n", symbol, local_index); ;
+#endif
                 compiler_writebyte(compiler,  I_GET_LOCAL);
                 compiler_writebyte(compiler,  local_index);
             } else {
@@ -328,22 +340,21 @@ void emit(Compiler* compiler, SExpr *expr) {
                     exit(0);
                 }
                 if(strcmp(symbol, "fn") == 0) {
-                    //example form: (fn (name (a b))  
-                    //                  (+ a b))
-                    SExpr* fndef = sexpr_list_first(rest); // '(name (a b))
-                    SExpr* fnname = sexpr_list_first(fndef); // "name"
-                    SExpr* args = sexpr_list_first(sexpr_list_rest(fndef)); // '(a b)
+                    SExpr* fn_def = sexpr_list_first(rest); // '(name (a b))
+                    const SExpr* fn_name = sexpr_list_first(fn_def); // "name"
+                    SExpr* args = sexpr_list_first(sexpr_list_rest(fn_def)); // '(a b)
                     SExpr* body = sexpr_list_rest(rest); // '(+ a b)
 
-                    if(fnname->type != SEXPR_SYMBOL) {
+                    if(fn_name->type != SEXPR_SYMBOL) {
                         printf("fnname must be a simple symbol\n");
                         exit(1);
                     }
 
-
-                    compiler_append_unit(compiler, fnname->value.symbol, sexpr_list_len(args));
-
+                    compiler_append_unit(compiler, fn_name->value.symbol, sexpr_list_len(args));
                     compiler->current_unit = &darray_pop(compiler->units);
+
+                    //enter the scope of the currently compiling function
+                    localchart_enter_scope(&compiler->current_unit->locals_chart);
 
                     SExpr* arg;
                     sexpr_list_foreach(arg, args) {
@@ -355,15 +366,17 @@ void emit(Compiler* compiler, SExpr *expr) {
                             printf("arg must be simple symbol");
                             exit(1);
                         }
+                        int result = localchart_insert(&compiler->current_unit->locals_chart, el->value.symbol);
+                        //printf(result != -1 ? "inserted\n" : "removed\n");
                     };
 
                     if (sexpr_list_len(body)) {
 #ifdef DEBUG
                         printf("emitting in function: has a body\n");
 #endif
-                        SExpr* cur;
-                        sexpr_list_foreach(cur, body) {
-                            emit(compiler, sexpr_list_first(cur));
+                        SExpr* cur_exp;
+                        sexpr_list_foreach(cur_exp, body) {
+                            emit(compiler, sexpr_list_first(cur_exp));
                         };
                     } else {
 #ifdef DEBUG
@@ -393,9 +406,9 @@ void emit(Compiler* compiler, SExpr *expr) {
 #endif
                     // Return to previous pointer as current unit. that is,
                     // the one before appending the unit ( size - 2)
+
                     compiler->current_unit = compiler_peekunit(compiler);
                     compiler_addconst(compiler, newclosure);
-
                 }
                 else if(strcmp(symbol, "+") == 0) { emit_bin_op(compiler, I_ADD, rest); }
                 else if(strcmp(symbol, "-") == 0) { emit_bin_op(compiler, I_SUB, rest); }
@@ -405,43 +418,43 @@ void emit(Compiler* compiler, SExpr *expr) {
                 else if (strcmp(symbol, "let") == 0) { //locally scoped variables
                     SExpr* bindings = sexpr_list_first(rest);
                     int even = 1;
-                    localchart_enter_scope(compiler->locals_chart);
+                    localchart_enter_scope(&compiler->current_unit->locals_chart);
 
-                    SExpr* cur;
-                    sexpr_list_foreach(cur, bindings) {
+                    SExpr* cur_exp;
+                    sexpr_list_foreach(cur_exp, bindings) {
                         //empty list
-                        if(sexpr_list_first(cur) == NULL) {
+                        if(sexpr_list_first(cur_exp) == NULL) {
                             break;
                         }
-                        SExpr* next = sexpr_list_rest(cur);
+                        SExpr* next = sexpr_list_rest(cur_exp);
                         //if uneven forms count for let declaration
                         if(next == NULL && (even % 2 == 1)) {
                             printf("Uneven forms in let binding\n");
                             exit(1);
                         }
 
-                        const SExpr* lhs = sexpr_list_first(cur);
+                        const SExpr* lhs = sexpr_list_first(cur_exp);
                         SExpr* rhs = sexpr_list_first(next);
                         emit(compiler, rhs);
 
-                        const size_t reg = localchart_insert(compiler->locals_chart, lhs->value.symbol);
-                        compiler_writebyte(compiler, I_SET_LOCAL); compiler_writebyte(compiler, (uint8_t)reg);
+                        const int reg = localchart_insert(&compiler->current_unit->locals_chart, lhs->value.symbol);
+                        compiler_writebyte(compiler, I_SET_LOCAL); compiler_writebyte(compiler, reg);
                         even+=1;
-                        cur = next;
+                        cur_exp = next;
                     }
                     SExpr* let_body = sexpr_list_rest(rest);
                     SExpr* bform;
                     sexpr_list_foreach(bform, let_body) {
                         emit(compiler, sexpr_list_first(bform));
                     }
-                    const size_t removed = localchart_leave_scope(compiler->locals_chart);
+                    const size_t removed = localchart_leave_scope(&compiler->current_unit->locals_chart);
                     printf("removed %zu\n", removed);
                     for(int i = 0; i < removed;i++ ) {
                         //compiler_writebyte(compiler, I_POP);
                     }
 
                 } else if (strcmp(symbol, "var") == 0) { //global variable
-                    SExpr* varname = sexpr_list_first(rest);
+                    const SExpr* varname = sexpr_list_first(rest);
                     if(varname->type!= SEXPR_SYMBOL) {
                         printf("For var declaration, expected symbol");
                         exit(1);
@@ -449,7 +462,6 @@ void emit(Compiler* compiler, SExpr *expr) {
                     SExpr* value = sexpr_list_first(sexpr_list_rest(rest));
                     emit(compiler,value);
 
-                    lobj v;
                     compiler_addconst(compiler, lobj_str(varname->value.symbol));
                     compiler_writebyte(compiler, I_SET_GLOBAL);
                 }  else if (strcmp(symbol, "if") == 0) {
@@ -458,25 +470,25 @@ void emit(Compiler* compiler, SExpr *expr) {
                     //condition
                     emit(compiler, sexpr_list_first(rest));
                     // emit a jmp if falsy
-                    int ushort_start = compiler_jump_emit(compiler, I_JMP_FALSY);
+                    const int ushort_start = compiler_jump_emit(compiler, I_JMP_FALSY);
                     // we get the length of bytes after jmp emitted,
-                    int cursize = BYTELEN;
+                    int cur_size = BYTELEN;
                     rest = sexpr_list_rest(rest);
 
                     //true val
                     emit(compiler, sexpr_list_first(rest));
-                    int ushort_true = compiler_jump_emit(compiler, I_JMP);
-                    // we can patch the jmp needed after processing truth branch by getting difference 
-                    // (length after processing truthy branch) - (length before) 
-                    int jmpfalse_location = BYTELEN - cursize; 
+                    const int ushort_true = compiler_jump_emit(compiler, I_JMP);
+                    // we can patch the jmp needed after processing truth branch by getting difference
+                    // (length after processing truthy branch) - (length before)
+                    const int jump_loc = BYTELEN - cur_size;
 
 
-                    cursize = BYTELEN;
+                    cur_size = BYTELEN;
                     //false val
                     emit(compiler, sexpr_list_first(sexpr_list_rest(rest)));
-                    size_t cur_location = BYTELEN - cursize;
+                    const size_t cur_location = BYTELEN - cur_size;
 
-                    compiler_jump_patch(compiler, ushort_start, jmpfalse_location);
+                    compiler_jump_patch(compiler, ushort_start, jump_loc);
                     compiler_jump_patch(compiler, ushort_true, cur_location);
 
                     #undef BYTELEN
@@ -503,7 +515,7 @@ void emit(Compiler* compiler, SExpr *expr) {
 
                 } else if(symbol[0] == '@')  {
                     char* ident = symbol+1;
-                    size_t local_index = localchart_resolvesymbol(compiler->locals_chart,ident);
+                    size_t local_index = localchart_resolvesymbol(&compiler->current_unit->locals_chart,ident);
                     if (local_index != -1) {
                         SExpr* new_value = sexpr_list_first(rest);
                         emit(compiler, new_value);
@@ -529,9 +541,9 @@ void emit(Compiler* compiler, SExpr *expr) {
                     // }
                     //if(found == NULL) { printf("function not found when calling\n"); exit(1); }
                     
-                    SExpr* cur;
+                    SExpr* cur_exp;
                     //emit bytecode for arguments
-                    sexpr_list_foreach(cur, rest) { emit(compiler, sexpr_list_first(cur)); }
+                    sexpr_list_foreach(cur_exp, rest) { emit(compiler, sexpr_list_first(cur_exp)); }
 
                     // need to emit I_CALL N where N is number of args
                     compiler_writebyte(compiler, I_CALL);
@@ -558,9 +570,8 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* buffer = "(fn (add ()) 10) "
-                                 "(fn (sad ()) (let (a 5) (+ a a))) "
-                                 "(sad)";
+            const char* buffer = "(fn (add (s v )) (- 74 (+ s v))) "
+                                 "(add (+ 12 12) 50)";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file
@@ -638,8 +649,7 @@ int main(int argc, char **argv) {
                 printf("Emitting bytecode for form:"); print_sexpr(exprs[i]);
                 emit(&compiler, exprs[i]);
             }
-            //VM vm;
-            //vm_create(&vm, &globals, &strings, NULL);
+
             printf("\n");
             for (size_t i = 0; i < count; i++) {
                 print_sexpr(exprs[i]);
