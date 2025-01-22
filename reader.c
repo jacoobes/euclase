@@ -29,7 +29,7 @@ char skip_whitespace(const char *input, int *pos) {
     return c;
 }
 
-inline SExpr* sexpr_number_create(double num) {
+SExpr* sexpr_number_create(double num) {
     SExpr *expr = ALLOCATE(SExpr, 1);
     expr->type = SEXPR_NUMBER;
     expr->value.number = num;
@@ -124,10 +124,10 @@ SExpr *read_atom(const char *input, int *pos) {
     if (cur == '"') {
         return read_string(input, pos);
     }
-    fprintf(stderr, "Failed to read: '%c'\n", cur);
+    fprintf(stderr, "Failed to read: '%c' while parsing an atom\n", cur);
     exit(1);
 }
-inline SExpr*  sexpr_list_create() {
+SExpr*  sexpr_list_create() {
     SExpr* head = ALLOCATE(SExpr, 1);
     head->type = SEXPR_LIST;
     head->value.cons.first = NULL;
@@ -142,9 +142,10 @@ SExpr* read_list(const char* input, int* pos) {
     SExpr* cur = NULL;
     while(*pos < strlen(input) && input[*pos] != ')') {
         char next = skip_whitespace(input, pos);
-        if(next == ')') {
+        if (next == ')') {
+            //handle empty list
             break;
-         }
+        }
         SExpr* el;
         if(next == '(') {
             el = read_list(input, pos);
@@ -167,12 +168,13 @@ SExpr* read_list(const char* input, int* pos) {
             cur = new_cons;
         }
     }
+    //skip any trailling whitespace in list
     skip_whitespace(input, pos);
+    // skip the )
     advance(pos);
     if(!cur) {
         return sexpr_list_create();
     }
-
     return head;
 }
 
@@ -182,7 +184,8 @@ SExpr **read_all(const char *input, size_t *count) {
     *count = 0;
     int i = 0;
     while (i < strlen(input)) {
-        char cur = skip_whitespace(input, &i);
+        char cur = input[i];
+        //printf("%c %d\n", cur, i);
         if (cur == ';') {
             while (input[i] != '\0' && input[i] != '\n') i++;
             continue;

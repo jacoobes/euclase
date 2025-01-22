@@ -1,7 +1,6 @@
 #include "./vm.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "./lobj.h"
 #include "table.h"
 
@@ -194,7 +193,7 @@ int vm_exec(VM *vm, int flags) {
                 printf("About to call function "); lobj_println(&maybe_callable);
 #endif
                 if(!is_closure(&maybe_callable)) {
-                    solid_str stack_trace = vm_stacktrace(vm, "Uncallable lobj");
+                    solid_str stack_trace = vm_stacktrace(vm, "Uncallable lobj -> needs closure");
                     printf("%s", SOLID_STR_TO_C(stack_trace));
                     return 1;
                 }

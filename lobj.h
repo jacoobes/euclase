@@ -95,6 +95,7 @@ vm_function* vm_function_create(uint8_t* initial_code,
 vm_closure* vm_closure_create(vm_function* fn);
 
 lobj lobj_str(const char *);
+
 lobj lobj_num(double x);
 lobj lobj_func(uint8_t* initial_code,
                uint8_t code_ct,

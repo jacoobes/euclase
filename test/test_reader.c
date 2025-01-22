@@ -4,6 +4,19 @@
 #include <string.h>
 #include "../reader.h"
 
+void test_skip_whitespace() {
+    const char* input4 = " ";
+    int count3=0;
+    skip_whitespace(input4, &count3);
+
+    assert(count3 == 1);
+
+    const char* input5 = "   (";
+    int count4=0;
+    char c = skip_whitespace(input5, &count4);
+    assert(c == '(');
+}
+
 void test_read_number() {
     int pos = 0;
     SExpr *expr = read_number("123", 1, &pos);
@@ -108,123 +121,114 @@ void test_read_list() {
     printf("test_read_list passed!\n");
 }
 void test_read_empty_list() {
-    printf("Begin read empty list\n");
+    printf("test read nested list\n");
     int pos = 0;
     const char *input = "()";
     SExpr *expr = read_list(input, &pos);
     // Check the outer list
-    printf("expr is a LIST\n");
     assert(expr != NULL);
     assert (expr->type == SEXPR_LIST );
-    printf("done: expr is a LIST\n");
+
+    int pos2 = 0;
+    const char *input2 = "((()))";
+    SExpr *expr2 = read_list(input2, &pos2);
+    // Check the outer list
+    assert(expr2 != NULL);
+    assert (expr2->type == SEXPR_LIST);
+    printf("done test read nested list\n");
 
 }
-//void test_read_all() {
-//    printf("Testing nested list!\n");
-//    const char *input = "(+ 1 2) (- 3 4)";
-//    size_t count = 0;
-//    SExpr **exprs = read_all(input, &count);
-//    assert(count == 2);
-//
-//    // First expression: (+ 1 2)
-//    SExpr *expr = exprs[0];
-//    assert(expr != NULL);
-//    assert(expr->type == SEXPR_LIST);
-//
-//    SExpr *cur = expr->value.list;
-//    assert(cur != NULL && cur->type == SEXPR_SYMBOL);
-//    assert(strcmp(cur->value.symbol, "+") == 0);
-//
-//    cur = cur->next;
-//    assert(cur != NULL && cur->type == SEXPR_NUMBER);
-//    assert(cur->value.number == 1);
-//
-//    cur = cur->next;
-//    assert(cur != NULL && cur->type == SEXPR_NUMBER);
-//    assert(cur->value.number == 2);
-//
-//    // Second expression: (- 3 4)
-//    expr = exprs[1];
-//    assert(expr != NULL);
-//    assert(expr->type == SEXPR_LIST);
-//
-//    cur = expr->value.list;
-//    assert(cur != NULL && cur->type == SEXPR_SYMBOL);
-//    assert(strcmp(cur->value.symbol, "-") == 0);
-//
-//    cur = cur->next;
-//    assert(cur != NULL && cur->type == SEXPR_NUMBER);
-//    assert(cur->value.number == 3);
-//
-//    cur = cur->next;
-//    assert(cur != NULL && cur->type == SEXPR_NUMBER);
-//    assert(cur->value.number == 4);
-//
-//    // Clean up
-//    for (size_t i = 0; i < count; i++) {
-//        free_sexpr(exprs[i]);
-//    }
-//    free(exprs);
-//    printf("test_read_all passed!\n");
-//}
-//
-//void test_read_nested_list() {
-//    printf("Testing nested list!\n");
-//    int pos = 0;
-//    const char *input = "(+ 1 (- 3 4) (* 2 3))";
-//    SExpr *expr = read_list(input, &pos);
-//    // Test outer list
-//    assert(expr != NULL);
-//    assert(expr->type == SEXPR_SYMBOL);
-//    assert(strcmp(expr->value.symbol, "+") == 0);
-//
-//    SExpr *cur = expr->next;
-//    assert(cur != NULL && cur->type == SEXPR_NUMBER);
-//    assert(cur->value.number == 1);
-//    
-//    // Test nested list '(- 3 4)'
-//    cur = cur->next;
-//    assert(cur != NULL && cur->type == SEXPR_LIST);
-//    SExpr *nested = cur->value.list;
-//    assert(nested != NULL && nested->type == SEXPR_SYMBOL);
-//    assert(strcmp(nested->value.symbol, "-") == 0);
-//    nested = nested->next;
-//    assert(nested != NULL && nested->type == SEXPR_NUMBER);
-//    assert(nested->value.number == 3);
-//    nested = nested->next;
-//    assert(nested != NULL && nested->type == SEXPR_NUMBER);
-//    assert(nested->value.number == 4);
-//    assert(nested->next == NULL);
-//    
-//    // Test nested list '(* 2 3)'
-//    cur = cur->next;
-//    assert(cur != NULL && cur->type == SEXPR_LIST);
-//    nested = cur->value.list;
-//    assert(nested != NULL && nested->type == SEXPR_SYMBOL);
-//    assert(strcmp(nested->value.symbol, "*") == 0);
-//    nested = nested->next;
-//    assert(nested != NULL && nested->type == SEXPR_NUMBER);
-//    assert(nested->value.number == 2);
-//    nested = nested->next;
-//    assert(nested != NULL && nested->type == SEXPR_NUMBER);
-//    assert(nested->value.number == 3);
-//    assert(nested->next == NULL);
-//    
-//    assert(cur->next == NULL);
-//    
-//    free_sexpr(expr);
-//    printf("test_read_nested_list passed!\n");
-//}
+
+void test_read_nested_list() {
+    printf("test read nested list\n");
+    int pos = 0;
+    const char *input = "(fn (add ()) )";
+    SExpr *expr = read_list(input, &pos);
+    // Check the outer list
+    assert(expr != NULL);
+    assert (expr->type == SEXPR_LIST );
+
+    SExpr *cur = sexpr_list_first(expr);
+    assert(cur != NULL && cur->type == SEXPR_SYMBOL);
+
+    assert(strcmp(cur->value.symbol, "fn") == 0);
+
+    SExpr *args = sexpr_list_first(sexpr_list_rest(expr));
+    assert(args != NULL && args->type == SEXPR_LIST);
+
+    printf("done: expr is a nested LIST\n");
+
+}
+
+
+
+void test_sexpr_list_len() {
+    const char *input = "()";
+    int pos = 0;
+    SExpr *expr = read_list(input, &pos);
+    printf("test len of LIST\n");
+    assert(expr != NULL);
+    assert(expr->type == SEXPR_LIST);
+    assert(sexpr_list_len(expr) == 0);
+    printf("end test len of LIST\n");
+
+    const char *input2 = "(1 2)";
+    int pos2 = 0;
+    SExpr *expr2 = read_list(input2, &pos2);
+    printf("test len of LIST\n");
+    assert(sexpr_list_len(expr2) == 2);
+    printf("end test len of LIST\n");
+}
+
+void test_sexpr_list_read_all() {
+    const char *input2 = "(1 2) (3 sad)";
+    size_t count;
+    printf("test list_read_all\n");
+    SExpr** a = read_all(input2, &count);
+    assert(a != NULL);
+    assert(count == 2);
+}
+void test_sexpr_list_spacing() {
+    const char *input = "( 1   2    )";
+    int pos = 0;
+    SExpr *li  = read_list(input, &pos);
+    assert(li != NULL);
+    assert(li->type == SEXPR_LIST);
+
+    assert(sexpr_list_first(li)->type == SEXPR_NUMBER && sexpr_list_first(li)->value.number == 1);
+    SExpr *cur = sexpr_list_rest(li);
+    assert(sexpr_list_first(cur)->type == SEXPR_NUMBER && sexpr_list_first(cur)->value.number == 2);
+
+}
+
+void test_sexpr_list_read_all2() {
+    const char* input3 = "(fn ( add) 10) (fn (sad ) ea)";
+    printf("test list_read_all2\n");
+    size_t count2;
+    SExpr** b = read_all(input3, &count2);
+    assert(b != NULL);
+    printf("%zu\n", count2);
+    assert(count2 == 2);
+    printf("done: adjacent lists2 are adjacent\n");
+}
 
 
 int main() {
+    test_skip_whitespace();
     test_read_number();
     test_read_symbol();
     test_read_string();
     test_read_list();
     test_read_empty_list();
+    test_sexpr_list_len();
+    test_sexpr_list_spacing();
+    test_read_nested_list();
+
+    test_sexpr_list_read_all();
+    test_sexpr_list_read_all2();
+
+    // todo handle lists that have NO SPACE between each other
     //test_read_all();
-    //test_read_nested_list();
 
     printf("All tests passed!\n");
     return 0;
