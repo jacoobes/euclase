@@ -232,7 +232,7 @@ int vm_exec(VM *vm, int flags) {
                 uint8_t slot = READ_BYTE();
                 vm_push(vm, cur_frame->slots[slot]);
 #ifdef DEBUG
-                printf("GET LOCAL %d ", slot); lobj_println(&vm->stack[slot]);
+                printf("GET_LOCAL %d ", slot); lobj_println(&vm->stack[slot]);
 #endif
             } break;
             case I_SET_LOCAL: {
@@ -282,36 +282,49 @@ int vm_exec(VM *vm, int flags) {
                 vm_push(vm, into_lobj(LVAL_OBJ, closure));
             } break;
             case I_GET_GLOBAL: {
-                lobj peek_vl = vm_peek(vm, 0); 
-                vm_string *name = AS_STR(peek_vl);
-#ifdef DEBUG
-                printf("GET GLOBAL "); lobj_println(&peek_vl);
-#endif
+                uint8_t slot = READ_BYTE();
+                // the name of our string is reference in bytecode's constants by index
+                vm_string *name = AS_STR(CONSTANT_AT(slot));
                 vm_string* dupe = table_find_string(vm->strings, &name->contents, name->hash);
-
                 if(dupe) {
-                    //printf("found interned string");
                     name=dupe;
+                } else {
+                    table_set(vm->strings, name, lobj_num(slot));
                 }
+#ifdef DEBUG
+                printf("GET GLOBAL "); printf("%s\n", SOLID_STR_TO_C(name->contents));
+#endif
                 lobj v;
                 if(!table_get(vm->globals, name, &v)) {
                     printf("variable not found");
                     //variable not found
                     return 1;
                 }
-                vm_pop(vm);
                 vm_push(vm, v);
             } break;
+            // I_SET_GLOBAL VALUE NAME
             case I_SET_GLOBAL: {
-                lobj val = vm_pop(vm);
-                vm_string* name = AS_STR(val);
+                // the name of the variable
+                uint8_t peek_vl = READ_BYTE();
+                vm_string *name = AS_STR(CONSTANT_AT(peek_vl));
+#ifdef DEBUG
+                printf("I_SET_GLOBAL "); printf("%s ", SOLID_STR_TO_C(name->contents));
+#endif
+
+                //check intern
                 vm_string* dupe = table_find_string(vm->strings, &name->contents, name->hash);
                 if(dupe) {
                     name=dupe;
                 } else {
-                    table_set(vm->strings, name, lobj_num(true));
+                    table_set(vm->strings, name, lobj_num(peek_vl));
                 }
-                table_set(vm->globals, name, vm_peek(vm, 0));
+                lobj value = vm_peek(vm, 0);
+#ifdef DEBUG
+                lobj_println(&value);
+#endif
+
+                // set value
+                table_set(vm->globals, name, value);
                 vm_pop(vm);
             } break;
             default: {

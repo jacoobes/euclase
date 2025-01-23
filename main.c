@@ -211,16 +211,24 @@ static inline int compiler_writebyte(const Compiler *compiler, uint8_t byte) {
     return darray_size(cur_unit->bytes)-1;
 }
 
-
-
-static inline void compiler_addconst(const Compiler* compiler, lobj constant) {
+// adds constant to current units' compiler pool. Returns the size of array after pushing
+static inline int compiler_add_const(const Compiler *compiler, lobj constant) {
     CompileUnit* cur_compileunit = compiler_cur_compileunit(compiler);
+
+    darray_push(cur_compileunit->constants, constant);
+    return darray_size(cur_compileunit->constants);
+}
+
+// emits I_LOAD and adds constant to current unit's compiler pool
+static inline void compiler_load_const(const Compiler* compiler, lobj constant) {
     compiler_writebyte(compiler, I_LOAD);
 #ifdef DEBUG
     printf("I_LOAD "); lobj_print(&constant); printf(" to %s\n", compiler_cur_compileunit(compiler)->name);
 #endif
-    darray_push(cur_compileunit->constants, constant);
-    compiler_writebyte(compiler, darray_size(cur_compileunit->constants) - 1);
+
+
+    compiler_add_const(compiler, constant);
+    compiler_writebyte(compiler, darray_size(compiler_cur_compileunit(compiler)->constants) - 1);
 }
 
 
@@ -301,7 +309,7 @@ void emit(Compiler* compiler, SExpr *expr) {
 #ifdef DEBUG
             printf("emitting number: I_LOAD "); lobj_println(&snum);
 #endif
-            compiler_addconst(compiler, snum);
+            compiler_load_const(compiler, snum);
         } break;
         case SEXPR_SYMBOL: {
             const char *symbol = cur->value.symbol;
@@ -314,15 +322,16 @@ void emit(Compiler* compiler, SExpr *expr) {
                 compiler_writebyte(compiler,  I_GET_LOCAL);
                 compiler_writebyte(compiler,  local_index);
             } else {
-                compiler_addconst(compiler, lobj_str(symbol));
+                const int new_size = compiler_add_const(compiler, lobj_str(symbol));
                 compiler_writebyte(compiler,I_GET_GLOBAL);
+                compiler_writebyte(compiler, new_size-1);
             }
         }
         break;
         case SEXPR_STRING: {
             const char *str = cur->value.string;
             //todo: check in table for existence to reuse str object
-            compiler_addconst(compiler, lobj_str(str));
+            compiler_load_const(compiler, lobj_str(str));
         }
         break;
         case SEXPR_LIST: {
@@ -349,7 +358,9 @@ void emit(Compiler* compiler, SExpr *expr) {
                         printf("fnname must be a simple symbol\n");
                         exit(1);
                     }
-
+#ifdef DEBUG
+                    printf("emitting fn: %s\n", fn_name->value.symbol);
+#endif
                     compiler_append_unit(compiler, fn_name->value.symbol, sexpr_list_len(args));
                     compiler->current_unit = &darray_pop(compiler->units);
 
@@ -372,7 +383,7 @@ void emit(Compiler* compiler, SExpr *expr) {
 
                     if (sexpr_list_len(body)) {
 #ifdef DEBUG
-                        printf("emitting in function: has a body\n");
+                        printf("\temitting in function: has a body\n");
 #endif
                         SExpr* cur_exp;
                         sexpr_list_foreach(cur_exp, body) {
@@ -380,9 +391,9 @@ void emit(Compiler* compiler, SExpr *expr) {
                         };
                     } else {
 #ifdef DEBUG
-                        printf("emitting in function: has no body\n");
+                        printf("\temitting in function: has no body\n");
 #endif
-                        compiler_addconst(compiler, lobj_num(0));
+                        compiler_load_const(compiler, lobj_num(0));
                     }
 
 
@@ -390,25 +401,28 @@ void emit(Compiler* compiler, SExpr *expr) {
 
 
                     const CompileUnit* cu = compiler_cur_compileunit(compiler);
-                    const lobj newclosure = into_lobj(LVAL_OBJ,
-                        vm_closure_create(vm_function_create(cu->bytes.item, darray_size(cu->bytes),
-                        cu->constants.item, darray_size(cu->constants),
-                        cu->arity, lobj_str(cu->name))));
+                    const lobj new_fn = lobj_func(cu->bytes.item, darray_size(cu->bytes),
+                                                      cu->constants.item, darray_size(cu->constants),
+                                                      cu->arity, lobj_str(cu->name));
 
 
-                    CompileUnit* cla;
 #ifdef DEBUG
-                    printf("compile units found:\n");
-                    darray_foreach(cla, compiler->units) {
-                        printf("%s,", cla->name);
-                    }
-                    printf(" cur unit '%s' \n", cu->name);
+                    // CompileUnit* cla;
+                    // printf("compile units found:\n");
+                    // darray_foreach(cla, compiler->units) {
+                    //     printf("%s,", cla->name);
+                    // }
+                    // printf(" cur unit '%s' \n", cu->name);
+                    printf("emitting function done %s\n", fn_name->value.symbol);
 #endif
                     // Return to previous pointer as current unit. that is,
                     // the one before appending the unit ( size - 2)
 
                     compiler->current_unit = compiler_peekunit(compiler);
-                    compiler_addconst(compiler, newclosure);
+                    compiler_load_const(compiler, new_fn);
+                    compiler_writebyte(compiler, I_CLOSURE);
+
+
                 }
                 else if(strcmp(symbol, "+") == 0) { emit_bin_op(compiler, I_ADD, rest); }
                 else if(strcmp(symbol, "-") == 0) { emit_bin_op(compiler, I_SUB, rest); }
@@ -462,8 +476,9 @@ void emit(Compiler* compiler, SExpr *expr) {
                     SExpr* value = sexpr_list_first(sexpr_list_rest(rest));
                     emit(compiler,value);
 
-                    compiler_addconst(compiler, lobj_str(varname->value.symbol));
+                    const int str_loc = compiler_add_const(compiler, lobj_str(varname->value.symbol));
                     compiler_writebyte(compiler, I_SET_GLOBAL);
+                    compiler_writebyte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
                     #define BYTELEN \
                         (darray_size(compiler_cur_compileunit(compiler)->bytes))
@@ -531,7 +546,7 @@ void emit(Compiler* compiler, SExpr *expr) {
                         printf("Too many arguments!\n");
                         exit(1);
                     }
-                    const CompileUnit* found = NULL;
+                    //const CompileUnit* found = NULL;
                     //CompileUnit* cu;
                     // darray_foreach(cu, compiler->units) {
                     //     if(strcmp(cu->name, symbol)==0 && cu->arity == argc) {
@@ -544,10 +559,15 @@ void emit(Compiler* compiler, SExpr *expr) {
                     SExpr* cur_exp;
                     //emit bytecode for arguments
                     sexpr_list_foreach(cur_exp, rest) { emit(compiler, sexpr_list_first(cur_exp)); }
-
+                    compiler_writebyte(compiler, I_GET_GLOBAL);
+                    const int new_size = compiler_add_const(compiler, lobj_str(symbol));
+                    compiler_writebyte(compiler, new_size-1);
                     // need to emit I_CALL N where N is number of args
                     compiler_writebyte(compiler, I_CALL);
                     compiler_writebyte(compiler, argc);
+#ifdef DEBUG
+                    printf("emitting: I_CALL %d for %s\n", argc, symbol);
+#endif
                 }
 
             }  
@@ -570,8 +590,7 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* buffer = "(fn (add (s v )) (- 74 (+ s v))) "
-                                 "(add (+ 12 12) 50)";
+            const char* buffer = "(var a 10) (+ a a)";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file

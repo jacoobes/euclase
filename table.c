@@ -56,11 +56,11 @@ static void adjust_capacity (HashTable* tbl, int capacity) {
 }
 
 // linear probing
-int table_set(HashTable* tbl, vm_string* k, lobj v) {
+int table_set(HashTable* tbl, vm_string* k, const lobj v) {
     if(tbl->count + 1 > tbl->capacity * TABLE_MAX_LOAD) {
         int new_cap = MAX(11, tbl->capacity*2);
 #if DEBUG
-        printf("Adjusting capacity, new cap = %d\n", new_cap);
+        //printf("Adjusting capacity, new cap = %d\n", new_cap);
 #endif
 
         //realloc ruins our bucket locations. we need to resize and put items in the right spots.
@@ -78,7 +78,8 @@ int table_set(HashTable* tbl, vm_string* k, lobj v) {
 }
 
 int table_get(HashTable* tbl, vm_string* k, lobj* v) {
-    if (tbl->count == 0) return 0;
+
+    if (tbl->count == 0) return false;
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k); 
     if(maybe_entry->key == NULL) {
         return false;
@@ -122,10 +123,8 @@ vm_string* table_find_string(HashTable* table, solid_str* ss, uint32_t hash) {
       // We found it.
       return entry->key;
     } else {
-        //printf("%s\n", SOLID_STR_TO_C(entry->key->contents));
+        printf("%s\n", SOLID_STR_TO_C(entry->key->contents));
         //printf("?!");
-        printf("Unable to find table_string");
-        exit(1);
     }
     index = (index + 1) % table->capacity;
   }
