@@ -197,7 +197,7 @@ int vm_exec(VM *vm, int flags) {
             case I_GT : {
                 lobj b = vm_pop(vm); lobj a = vm_pop(vm);
                 if (IS_NUM(a) && IS_NUM(b)) {
-                    lobj result = {LVAL_NUM, {.num = (a.v.num <= b.v.num)}};
+                    lobj result = {LVAL_NUM, {.num = (a.v.num > b.v.num)}};
                     vm_push(vm, result);
                 } else {
                     printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror LTE")));

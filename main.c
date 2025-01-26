@@ -465,9 +465,9 @@ void emit(Compiler* compiler, SExpr *expr) {
                         cur_exp = next;
                     }
                     SExpr* let_body = sexpr_list_rest(rest);
-                    SExpr* bform;
-                    sexpr_list_foreach(bform, let_body) {
-                        emit(compiler, sexpr_list_first(bform));
+                    SExpr* b_form;
+                    sexpr_list_foreach(b_form, let_body) {
+                        emit(compiler, sexpr_list_first(b_form));
                     }
                     const size_t removed = localchart_leave_scope(&compiler->current_unit->locals_chart);
                     printf("removed %zu\n", removed);
@@ -556,7 +556,7 @@ void emit(Compiler* compiler, SExpr *expr) {
                     }
                 } else {
                     // if its none of the compiler specials, we assume it's a function call.
-                    int argc = sexpr_list_len(rest);
+                    const int argc = sexpr_list_len(rest);
                     if(argc > 256) {
                         printf("Too many arguments!\n");
                         exit(1);
