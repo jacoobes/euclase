@@ -114,7 +114,7 @@ int localchart_resolvesymbol(const LocalChart* lc, const char* symbol) {
     }
     return found;
 }
-int localchart_insert(LocalChart *lc, char* symbol) {
+int localchart_insert(LocalChart *lc, const char* symbol) {
     if(darray_size(lc->locals) == 256) {
         printf("Variable overflow. Reached maximum variables per scope (256)");
         return -1;
@@ -205,7 +205,7 @@ void compiler_destroy(const Compiler *compiler) {
     }
 }
 
-static inline int compiler_writebyte(const Compiler *compiler, uint8_t byte) {
+static inline int compiler_writebyte(const Compiler *compiler, const uint8_t byte) {
     CompileUnit* cur_unit = compiler_cur_compileunit(compiler);
     darray_push(cur_unit->bytes, byte);
     return darray_size(cur_unit->bytes)-1;
@@ -271,7 +271,7 @@ SExpr* expect_next_form(SExprType ty, SExpr* exp, char* assert_msg) {
 
 void emit(Compiler* compiler, SExpr* sexpr);
 
-static inline void emit_bin_op(Compiler* compiler, enum Instruction op, SExpr* rest) {
+static inline void emit_bin_op(Compiler* compiler, const enum Instruction op, SExpr* rest) {
     SExpr* cur;
     sexpr_list_foreach(cur, rest) {
         SExpr* hd = sexpr_list_first(cur);
@@ -280,7 +280,7 @@ static inline void emit_bin_op(Compiler* compiler, enum Instruction op, SExpr* r
     compiler_writebyte(compiler, op);
 }
 
-int compiler_jump_emit(const Compiler* compiler, enum Instruction instruction) {
+int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruction) {
     compiler_writebyte(compiler,instruction); //0
     //short
     int jmp_instruct_loc = compiler_writebyte(compiler, 0xff); //1 placeholder
@@ -361,8 +361,14 @@ void emit(Compiler* compiler, SExpr *expr) {
 #ifdef DEBUG
                     printf("emitting fn: %s\n", fn_name->value.symbol);
 #endif
+
+                    // first class functions are just variables in disguise, thats why clojure's
+                    // defn is just syntax over def and f
+
+
                     compiler_append_unit(compiler, fn_name->value.symbol, sexpr_list_len(args));
                     compiler->current_unit = &darray_pop(compiler->units);
+
 
                     //enter the scope of the currently compiling function
                     localchart_enter_scope(&compiler->current_unit->locals_chart);
@@ -395,8 +401,6 @@ void emit(Compiler* compiler, SExpr *expr) {
 #endif
                         compiler_load_const(compiler, lobj_num(0));
                     }
-
-
                     compiler_writebyte(compiler, I_RETURN);
 
 
@@ -422,7 +426,9 @@ void emit(Compiler* compiler, SExpr *expr) {
                     compiler_load_const(compiler, new_fn);
                     compiler_writebyte(compiler, I_CLOSURE);
 
-
+                    const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
+                    compiler_writebyte(compiler, I_SET_GLOBAL);
+                    compiler_writebyte(compiler, str_loc-1);
                 }
                 else if(strcmp(symbol, "+") == 0) { emit_bin_op(compiler, I_ADD, rest); }
                 else if(strcmp(symbol, "-") == 0) { emit_bin_op(compiler, I_SUB, rest); }
@@ -529,8 +535,8 @@ void emit(Compiler* compiler, SExpr *expr) {
                     #undef BYTELEN
 
                 } else if(symbol[0] == '@')  {
-                    char* ident = symbol+1;
-                    size_t local_index = localchart_resolvesymbol(&compiler->current_unit->locals_chart,ident);
+                    const char* ident = symbol+1;
+                    const size_t local_index = localchart_resolvesymbol(&compiler->current_unit->locals_chart,ident);
                     if (local_index != -1) {
                         SExpr* new_value = sexpr_list_first(rest);
                         emit(compiler, new_value);
@@ -555,13 +561,17 @@ void emit(Compiler* compiler, SExpr *expr) {
                     //     }
                     // }
                     //if(found == NULL) { printf("function not found when calling\n"); exit(1); }
-                    
+
+                    //emit I_GET_GLOBAL symbol
+#ifdef DEBUG
+                    printf("emitting call");
+#endif
+                    emit(compiler, list_head);
+
                     SExpr* cur_exp;
                     //emit bytecode for arguments
                     sexpr_list_foreach(cur_exp, rest) { emit(compiler, sexpr_list_first(cur_exp)); }
-                    compiler_writebyte(compiler, I_GET_GLOBAL);
-                    const int new_size = compiler_add_const(compiler, lobj_str(symbol));
-                    compiler_writebyte(compiler, new_size-1);
+
                     // need to emit I_CALL N where N is number of args
                     compiler_writebyte(compiler, I_CALL);
                     compiler_writebyte(compiler, argc);
@@ -590,7 +600,9 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* buffer = "(var a 10) (+ a a)";
+            const char* buffer = "(fn (add (x y)) (+ x y)) "
+                                 "(fn (sad (y)) (- 5 (add y 10)) ) "
+                                 "(sad 10) ";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file
