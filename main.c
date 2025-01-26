@@ -435,6 +435,8 @@ void emit(Compiler* compiler, SExpr *expr) {
                 else if(strcmp(symbol, "/") == 0) { emit_bin_op(compiler, I_DIV, rest); }
                 else if(strcmp(symbol, "*") == 0) { emit_bin_op(compiler, I_MUL, rest); }
                 else if(strcmp(symbol, "%") == 0) { emit_bin_op(compiler, I_MOD, rest); }
+                else if(strcmp(symbol, "<=") == 0) {  emit_bin_op(compiler, I_LTE, rest);}
+                else if(strcmp(symbol, ">") == 0)  {   emit_bin_op(compiler, I_GT, rest);}
                 else if (strcmp(symbol, "let") == 0) { //locally scoped variables
                     SExpr* bindings = sexpr_list_first(rest);
                     int even = 1;
@@ -469,8 +471,8 @@ void emit(Compiler* compiler, SExpr *expr) {
                     }
                     const size_t removed = localchart_leave_scope(&compiler->current_unit->locals_chart);
                     printf("removed %zu\n", removed);
-                    for(int i = 0; i < removed;i++ ) {
-                        //compiler_writebyte(compiler, I_POP);
+                    for(int i = 0; i < removed; i++ ) {
+                        compiler_writebyte(compiler, I_POP);
                     }
 
                 } else if (strcmp(symbol, "var") == 0) { //global variable
@@ -479,7 +481,13 @@ void emit(Compiler* compiler, SExpr *expr) {
                         printf("For var declaration, expected symbol");
                         exit(1);
                     }
+                    if (sexpr_list_rest(rest) == NULL) {
+                        printf("For var declaration, expected a value");
+                        exit(1);
+                    }
                     SExpr* value = sexpr_list_first(sexpr_list_rest(rest));
+
+
                     emit(compiler,value);
 
                     const int str_loc = compiler_add_const(compiler, lobj_str(varname->value.symbol));
@@ -514,7 +522,7 @@ void emit(Compiler* compiler, SExpr *expr) {
 
                     #undef BYTELEN
                 } else if (strcmp(symbol, "or") == 0) {
-                    
+
 
                 } else if (strcmp(symbol, "while") == 0) {
 
@@ -544,6 +552,7 @@ void emit(Compiler* compiler, SExpr *expr) {
                         compiler_writebyte(compiler, local_index);
                     } else {
                         //todo: string intern, check for existence
+
                     }
                 } else {
                     // if its none of the compiler specials, we assume it's a function call.
@@ -566,6 +575,7 @@ void emit(Compiler* compiler, SExpr *expr) {
 #ifdef DEBUG
                     printf("emitting call");
 #endif
+                    // emit a get global op
                     emit(compiler, list_head);
 
                     SExpr* cur_exp;
@@ -600,9 +610,11 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* buffer = "(fn (add (x y)) (+ x y)) "
-                                 "(fn (sad (y)) (- 5 (add y 10)) ) "
-                                 "(sad 10) ";
+            const char* buffer =
+"(fn (fact (x))\n"
+"    (if (<= x 2) x\n"
+"                 (* x (fact (- x 1)))))"
+" (let (a a) a";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file

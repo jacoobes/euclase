@@ -184,6 +184,26 @@ int vm_exec(VM *vm, int flags) {
                     return 1;
                 }
             } break;
+            case I_LTE : {
+                lobj b = vm_pop(vm); lobj a = vm_pop(vm);
+                if (IS_NUM(a) && IS_NUM(b)) {
+                    lobj result = {LVAL_NUM, {.num = (a.v.num <= b.v.num)}};
+                    vm_push(vm, result);
+                } else {
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror LTE")));
+                    return 1;
+                }
+            } break;
+            case I_GT : {
+                lobj b = vm_pop(vm); lobj a = vm_pop(vm);
+                if (IS_NUM(a) && IS_NUM(b)) {
+                    lobj result = {LVAL_NUM, {.num = (a.v.num <= b.v.num)}};
+                    vm_push(vm, result);
+                } else {
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror LTE")));
+                    return 1;
+                }
+            } break;
             case I_CALL: {
                 // arg count is operand.
                 uint8_t argc = READ_BYTE();
@@ -327,6 +347,7 @@ int vm_exec(VM *vm, int flags) {
                 table_set(vm->globals, name, value);
                 vm_pop(vm);
             } break;
+
             default: {
                 printf("Unknown opcode '%c', misalignment?", instruction);
                 return 1;

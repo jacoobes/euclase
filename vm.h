@@ -25,6 +25,8 @@ enum Instruction {
     I_MUL         , // multiply two numbers
     I_DIV         , // divide two numbers
     I_MOD         , // modulus two numbers
+    I_LTE         , // LTE two numbers
+    I_GT         , //  GTE two numbers
     I_CALL        , // call function
     I_JMP         , // jmp to instr ptr
     I_JMP_FALSY   , // jmp if falsy
