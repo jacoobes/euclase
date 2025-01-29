@@ -201,7 +201,6 @@ void compiler_destroy(const Compiler *compiler) {
     CompileUnit* cu;
     darray_foreach(cu, compiler->units) {
         free(cu->name);
-        //localchart_free(cu->locals_chart);
     }
 }
 
@@ -578,15 +577,6 @@ void emit(Compiler* compiler, SExpr *expr) {
                         printf("Too many arguments!\n");
                         exit(1);
                     }
-                    //const CompileUnit* found = NULL;
-                    //CompileUnit* cu;
-                    // darray_foreach(cu, compiler->units) {
-                    //     if(strcmp(cu->name, symbol)==0 && cu->arity == argc) {
-                    //         found=cu;
-                    //         break;
-                    //     }
-                    // }
-                    //if(found == NULL) { printf("function not found when calling\n"); exit(1); }
 
                     //emit I_GET_GLOBAL symbol
 #ifdef DEBUG
@@ -627,7 +617,9 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* buffer ="(and 1 (+ 1 2))";
+            const char* buffer ="(fn (fact (x))"
+                                "   (if (<= x 2) x  (* x (fact (- x 1)))))"
+            " (fact 10)";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file

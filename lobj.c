@@ -6,7 +6,7 @@
 
 //djb2
 unsigned long
-hash(unsigned char *str)
+hash(const unsigned char *str)
 {
     unsigned long hash = 5381;
     int c;
@@ -19,7 +19,16 @@ hash(unsigned char *str)
 
 vm_closure* vm_closure_create(vm_function* fn) {
     vm_closure* closure = ALLOCATE(vm_closure, 1);
+
+    // current tracking size
+    closure->upvalues_ct=0;
+    // zero out closure->upvalues
+    memset(closure->upvalues, 0, sizeof(closure->upvalues));
+
+    // union tag
     closure->obj.type = OBJ_CLOSURE;
+
+    // pointer to vm_function
     closure->fn=fn;
     return closure;
 }
@@ -141,10 +150,10 @@ void lobj_print(lobj* o) {
     case LVAL_OBJ: {
         switch(o->v.obj->type) {
             case OBJ_FUNC: {
-                vm_function* fn = ((vm_function*)o->v.obj);
+                const vm_function* fn = ((vm_function*)o->v.obj);
                 //todo: fix
                 printf("func %s(arity=%d)", SOLID_STR_TO_C(AS_STR(fn->name)->contents), fn->arity);
-            }break;
+            } break;
             case OBJ_CLOSURE: {
                 printf("closure ");
                 vm_closure* closure = as_closure(o);

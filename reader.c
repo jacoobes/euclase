@@ -48,7 +48,7 @@ SExpr *read_number(const char *input, int sign, int *pos) {
 }
 
 SExpr *read_symbol(const char *input, int *pos) {
-    int capacity = 256;
+    const int capacity = 256;
     char *symbol = calloc(capacity, sizeof(char));
     int i = 0;
     char c = input[*pos];
@@ -116,7 +116,7 @@ SExpr *read_string(const char *input, int *pos) {
 }
 
 SExpr *read_atom(const char *input, int *pos) {
-    char cur = input[*pos];
+    const char cur = input[*pos];
     if (isdigit(cur)) {
         return read_number(input, 1, pos);
     }
@@ -170,9 +170,9 @@ SExpr* read_list(const char* input, int* pos) {
             cur = new_cons;
         }
     }
-    //skip any trailling whitespace in list
+    //skip any trailing whitespace in list
     skip_whitespace(input, pos);
-    // skip the )
+    // skip the ')'
     advance(pos);
     if(!cur) {
         return sexpr_list_create();

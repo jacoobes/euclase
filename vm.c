@@ -100,6 +100,7 @@ int vm_exec(VM *vm, int flags) {
     #define READ_SHORT() \
         (cur_frame->ip += 2, \
             (uint16_t)(cur_frame->ip[-2] << 8 | cur_frame->ip[-1]))
+    #define READ_STRING() AS_STR(CONSTANT_AT(READ_BYTE()))
 
     while (1) {
         uint8_t instruction;
@@ -220,12 +221,11 @@ int vm_exec(VM *vm, int flags) {
                 vm_closure* closure = as_closure(&maybe_callable);
                 // apply: we take the maybe callable
                 if(apply(vm, closure, argc)) { 
-                    //strlcpy(vm->error,, sizeof vm->error);
                     solid_str stack_trace = vm_stacktrace(vm, "Failed to call an lobj");
                     printf("%s", SOLID_STR_TO_C(stack_trace));
                     return 1;
                 }
-                // afterwards, the current callstack is set to one less than previous.
+                // afterward, the current callstack is set to one less than previous.
                 cur_frame = &vm->call_stack[vm->frame_count - 1];
             } break;
             case I_JMP: {
@@ -302,14 +302,15 @@ int vm_exec(VM *vm, int flags) {
                 vm_push(vm, into_lobj(LVAL_OBJ, closure));
             } break;
             case I_GET_GLOBAL: {
-                uint8_t slot = READ_BYTE();
                 // the name of our string is reference in bytecode's constants by index
-                vm_string *name = AS_STR(CONSTANT_AT(slot));
+                vm_string *name = READ_STRING();
+
+                // TODO: can i do this in comptime?
                 vm_string* dupe = table_find_string(vm->strings, &name->contents, name->hash);
                 if(dupe) {
                     name=dupe;
                 } else {
-                    table_set(vm->strings, name, lobj_num(slot));
+                    table_set(vm->strings, name, lobj_num(1));
                 }
 #ifdef DEBUG
                 printf("GET GLOBAL "); printf("%s\n", SOLID_STR_TO_C(name->contents));
@@ -325,18 +326,18 @@ int vm_exec(VM *vm, int flags) {
             // I_SET_GLOBAL VALUE NAME
             case I_SET_GLOBAL: {
                 // the name of the variable
-                uint8_t peek_vl = READ_BYTE();
-                vm_string *name = AS_STR(CONSTANT_AT(peek_vl));
+                vm_string *name = READ_STRING();
 #ifdef DEBUG
                 printf("I_SET_GLOBAL "); printf("%s ", SOLID_STR_TO_C(name->contents));
 #endif
 
                 //check intern
+                // TODO: can i do this in comptime?
                 vm_string* dupe = table_find_string(vm->strings, &name->contents, name->hash);
                 if(dupe) {
                     name=dupe;
                 } else {
-                    table_set(vm->strings, name, lobj_num(peek_vl));
+                    table_set(vm->strings, name, lobj_num(1));
                 }
                 lobj value = vm_peek(vm, 0);
 #ifdef DEBUG
@@ -356,6 +357,7 @@ int vm_exec(VM *vm, int flags) {
     }
     #undef READ_BYTE
     #undef READ_SHORT
+    #undef READ_STRING
     #undef CONSTANT_AT
 
 }

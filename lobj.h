@@ -5,6 +5,8 @@
 #include "./solid_str.h"
 #include <stdbool.h>
 
+#define MAX_UPVALUE_COUNT 128
+
 typedef enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_OBJ } LVAL;
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 typedef enum { OBJ_CLOSURE, OBJ_STR, OBJ_FUNC, OBJ_USR } LOBJ_TYPE;
@@ -49,6 +51,8 @@ typedef struct {
 
 typedef struct {
     vm_object obj;
+    uint8_t upvalues[MAX_UPVALUE_COUNT]; //maximum upvalue count
+    uint8_t upvalues_ct;
     vm_function* fn;
 } vm_closure;
 
@@ -64,8 +68,7 @@ typedef struct {
 #define OBJ_VAL(obj_) ((lobj){ .type=LVAL_OBJ, .v.obj=(vm_object*)(obj_) })
 
 static inline bool is_closure(lobj* lval) {
-    return (lval->type == LVAL_OBJ) 
-    && (lval->v.obj->type == OBJ_CLOSURE);
+    return (lval->type == LVAL_OBJ)  && (lval->v.obj->type == OBJ_CLOSURE);
 }
 static inline vm_closure* as_closure(lobj* lval) {
     return (vm_closure*)lval->v.obj;
