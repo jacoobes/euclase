@@ -521,9 +521,26 @@ void emit(Compiler* compiler, SExpr *expr) {
                     compiler_jump_patch(compiler, ushort_true, cur_location);
 
                     #undef BYTELEN
-                } else if (strcmp(symbol, "or") == 0) {
+                } else if (strcmp(symbol, "and") == 0) {
+                    // evaluate first. if false, evaluate second one
+                    #define BYTELEN \
+                        (darray_size(compiler_cur_compileunit(compiler)->bytes))
 
+                    // emit first
+                    emit(compiler, sexpr_list_first(rest));
 
+                    int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY);
+                    int cur_size = BYTELEN;
+
+                    rest = sexpr_list_rest(rest);
+                    // emit second
+                    emit(compiler, sexpr_list_first(rest));
+
+                    const size_t cur_location = BYTELEN - cur_size;
+
+                    compiler_jump_patch(compiler, ushort_begin, cur_location);
+
+                    #undef BYTELEN
                 } else if (strcmp(symbol, "while") == 0) {
 
                     #define BYTELEN \
@@ -610,11 +627,7 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* buffer =
-"(fn (fact (x))\n"
-"    (if (<= x 2) x\n"
-"                 (* x (fact (- x 1)))))"
-" (let (a a) a";
+            const char* buffer ="(and 1 (+ 1 2))";
 
             if (!buffer) {
                 return 1;  // Error already printed in read_file
