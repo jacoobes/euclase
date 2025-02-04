@@ -72,6 +72,8 @@ typedef struct {
     
     // call stack: functions 
     CallFrame call_stack[DEFAULT_CALL_STACK_SIZE];
+
+    vm_closure* main_fn;
     int frame_count;
 } VM;
 

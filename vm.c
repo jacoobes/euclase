@@ -61,6 +61,7 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
         exit(1);
     }
     vm_closure* main_closure = as_closure(main);
+    vm->main_fn=main_closure;
     if(apply(vm, main_closure, 0) != 0) {
         printf("main fn failed");
     }
@@ -351,7 +352,6 @@ int vm_exec(VM *vm, int flags) {
 void vm_free(VM* vm) {
     table_free(vm->globals);
     table_free(vm->strings);
-
     vm->frame_count=0;
 
 }
