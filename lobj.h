@@ -61,6 +61,7 @@ typedef struct {
 #define IS_NUM(obj) ((obj).type == LVAL_NUM)
 #define IS_OBJ(obj) ((obj).type == LVAL_OBJ)
 #define IS_FUNC(obj) (IS_OBJ((obj)) && (obj).v.obj->type == OBJ_FUNC)
+#define IS_STR(obj_) (IS_OBJ((obj_)) && (obj_).v.obj->type == OBJ_STR)
 
 #define AS_STR(obj_) ((vm_string*)(obj_).v.obj)
 #define AS_FUNC(obj_) ((vm_function*)(obj_).v.obj)
@@ -77,10 +78,10 @@ static inline bool is_str(lobj* lval) {
     return lval->type == LVAL_OBJ && lval->v.obj->type == OBJ_STR;
 }
 
-static inline lobj into_lobj(LVAL ty, void* lval) {
-    lobj lo =  (lobj){ 
+static inline lobj into_lobj(const LVAL ty, void* l_val) {
+    const lobj lo =  (lobj){
         .type=ty,
-        .v.obj=((vm_object*)lval)
+        .v.obj=((vm_object*)l_val)
     };
     return lo;
 };
@@ -96,16 +97,12 @@ vm_function* vm_function_create(uint8_t* initial_code,
                                 lobj name);
 
 vm_closure* vm_closure_create(vm_function* fn);
-
+vm_string* vm_string_create(const char* contents);
+void vm_string_free(vm_string* s);
 lobj lobj_str(const char *);
 
 lobj lobj_num(double x);
-lobj lobj_func(uint8_t* initial_code,
-               uint8_t code_ct,
-               lobj* values,
-               int values_count,
-               uint8_t arity,
-               lobj name);
+
 lobj lobj_err(int err);
 void lobj_free(lobj*);
 void lobj_print(lobj*);

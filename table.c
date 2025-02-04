@@ -36,7 +36,7 @@ static void adjust_capacity (HashTable* tbl, int capacity) {
     tbl->count = 0;
     if (tbl->entries) {
         for(int i = 0; i < capacity; i++) {
-            TableEntry* old_entry = &tbl->entries[i];
+            const TableEntry* old_entry = &tbl->entries[i];
             if (old_entry->key == NULL) {
                 continue;
             }
@@ -63,7 +63,7 @@ int table_set(HashTable* tbl, vm_string* k, const lobj v) {
         //printf("Adjusting capacity, new cap = %d\n", new_cap);
 #endif
 
-        //realloc ruins our bucket locations. we need to resize and put items in the right spots.
+        //reallocate ruins our bucket locations. we need to resize and put items in the right spots.
         adjust_capacity(tbl, new_cap);
     }
 
@@ -77,7 +77,7 @@ int table_set(HashTable* tbl, vm_string* k, const lobj v) {
     return isNewKey;
 }
 
-int table_get(HashTable* tbl, vm_string* k, lobj* v) {
+int table_get(const HashTable* tbl, vm_string* k, lobj* v) {
 
     if (tbl->count == 0) return false;
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k); 
@@ -88,7 +88,7 @@ int table_get(HashTable* tbl, vm_string* k, lobj* v) {
     return 1;
 }
 
-int table_delete(HashTable* tbl, vm_string* k) {
+int table_delete(const HashTable* tbl, vm_string* k) {
     if(tbl->count == 0) 
         return false;
     TableEntry* entry = find_entry(tbl->entries, tbl->capacity, k);
@@ -106,7 +106,7 @@ void table_create(HashTable* tbl) {
     tbl->entries=NULL;
 }
 
-vm_string* table_find_string(HashTable* table, solid_str* ss, uint32_t hash) {
+vm_string* table_find_string(HashTable* table, const solid_str* ss, uint32_t hash) {
   if (table->count == 0) return NULL;
 
   uint32_t index = hash % table->capacity;

@@ -24,10 +24,10 @@ typedef struct HashTable {
 
 void table_create(HashTable* tbl);
 int table_set(HashTable* tbl, vm_string*, lobj);
-int table_get(HashTable* tbl, vm_string*, lobj*);
-int table_delete(HashTable* tbl, vm_string*);
+int table_get(const HashTable* tbl, vm_string*, lobj*);
+int table_delete(const HashTable* tbl, vm_string*);
 void table_free(HashTable* table);
-vm_string* table_find_string(HashTable* table, solid_str* ss, uint32_t hash);
+vm_string* table_find_string(HashTable* table, const solid_str* ss, uint32_t hash);
 
 
 

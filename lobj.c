@@ -16,7 +16,18 @@ hash(const unsigned char *str)
 
     return hash;
 }
+vm_string* vm_string_create(const char* contents) {
+    vm_string* s = malloc(sizeof(vm_string));
+    s->hash= hash(contents);
+    s->obj.type=OBJ_STR;
+    s->contents=solid_str_new(contents);
+    return s;
+}
+void vm_string_free(vm_string* s) {
+    solid_str_free(&s->contents);
+    free(s);
 
+}
 vm_closure* vm_closure_create(vm_function* fn) {
     vm_closure* closure = ALLOCATE(vm_closure, 1);
 
@@ -35,11 +46,8 @@ vm_closure* vm_closure_create(vm_function* fn) {
 
 // NOTE: contents MUST BE NULL TERMINATED
 lobj lobj_str(const char* contents) {
-    solid_str ss = solid_str_new(contents);
-    vm_string* s = ALLOCATE(vm_string, 1);
-    s->hash= hash(contents);
-    s->obj.type=OBJ_STR;
-    s->contents=ss;
+    // solid string is heap allocated
+    vm_string* s = vm_string_create(contents);
     return (lobj) {
         .type=LVAL_OBJ,
         .v.obj=(vm_object*)s
@@ -50,43 +58,22 @@ lobj lobj_str(const char* contents) {
 
 vm_function* vm_function_create(
     uint8_t* initial_code,
-    uint8_t code_ct,
+    const uint8_t code_ct,
     lobj* values,
-    int values_count,
-    uint8_t arity,
+    const int values_count,
+    const uint8_t arity,
     lobj name
 ) {
-   vm_function* fn = ALLOCATE(vm_function, 1);
-   fn->obj.type=OBJ_FUNC;
-   fn->chunk=initial_code;
-   fn->chunk_ct=code_ct;
-   fn->values=values;
-   fn->values_ct=values_count;
-   fn->arity=arity;
-   fn->name=name; 
+   vm_function* fn = malloc(sizeof (vm_function));
+                   fn->obj.type=OBJ_FUNC;
+                   fn->chunk=initial_code;
+                   fn->chunk_ct=code_ct;
+                   fn->values=values;
+                   fn->values_ct=values_count;
+                   fn->arity=arity;
+                   fn->name=name;
    return fn;
 }
-
-lobj lobj_func(uint8_t* initial_code,
-               uint8_t code_ct,
-               lobj* values,
-               int values_count,
-               uint8_t arity,
-               lobj name) {
-    //FIX ME: PROPERLY MANAGE MEMORY
-    vm_function* fn = vm_function_create(
-               initial_code,
-               code_ct,
-               values,
-               values_count,
-               arity,
-               name ); 
-    return (lobj){
-        .type=LVAL_OBJ,
-        .v.obj=(vm_object*)fn
-    };
-}
-
 
 
 void lobj_free(lobj* o) {
@@ -97,8 +84,8 @@ void lobj_free(lobj* o) {
     case LVAL_ERR:  break;
     case LVAL_SYM: break;
     case LVAL_OBJ: {
-        int objty = o->v.obj->type;
-        switch(objty) {
+        int obj_ty = o->v.obj->type;
+        switch(obj_ty) {
             case OBJ_STR: { 
                 vm_string * fn=(vm_string*)o->v.obj;
                 solid_str_free(&fn->contents);
@@ -116,6 +103,9 @@ void lobj_free(lobj* o) {
             } break;
             case OBJ_USR: {
             } break;
+            default: {
+                printf("Unknown object type to free");
+            }break;
         }
     } break;
     

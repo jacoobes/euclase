@@ -38,7 +38,7 @@ SExpr* sexpr_number_create(double num) {
     return expr;
 }
 
-SExpr *read_number(const char *input, int sign, int *pos) {
+SExpr *read_number(const char *input, const int sign, int *pos) {
     int64_t result = 0;
     for (char c = input[*pos]; isdigit(c); c = next(input, pos)) {
         result *= 10;
@@ -111,6 +111,7 @@ SExpr *read_string(const char *input, int *pos) {
     (*pos)++; // skip '"'
     SExpr *expr = ALLOCATE(SExpr, 1);
     expr->type = SEXPR_STRING;
+    // string is heap allocated
     expr->value.string = str;
     return expr;
 }
@@ -143,7 +144,7 @@ SExpr* read_list(const char* input, int* pos) {
     SExpr* head = NULL;
     SExpr* cur = NULL;
     while(*pos < strlen(input) && input[*pos] != ')') {
-        char next = skip_whitespace(input, pos);
+        const char next = skip_whitespace(input, pos);
         if (next == ')') {
             //handle empty list
             break;
@@ -240,11 +241,10 @@ void free_sexpr(SExpr *expr) {
     switch (expr->type) {
         case SEXPR_SYMBOL:
             free(expr->value.symbol);
-            return;
-        break;
+            break;
         case SEXPR_STRING:
             free(expr->value.string);
-            return;
+            break;
         case SEXPR_LIST: {
             SExpr* head = sexpr_list_first(expr);
             if(head != NULL) {
@@ -255,6 +255,6 @@ void free_sexpr(SExpr *expr) {
                 free_sexpr(rest);
             }
         } break;
-        case SEXPR_NUMBER: return;
+        case SEXPR_NUMBER: {} break;
     }
 }

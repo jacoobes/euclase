@@ -44,19 +44,20 @@ lobj vm_pop(VM *vm) {
     return *vm->stack_top;
 }
 
-lobj vm_peek(VM* vm, int distance) {
+lobj vm_peek(const VM* vm, const int distance) {
     return vm->stack_top[-1 - distance];
 }
 
 void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     reset_stack(vm);
     vm->frame_count=0;
-    // tables should be already init'd
+
+    // tables should be already initiated
     vm->globals = globals;
     vm->strings = strings;
 
     if(!is_closure(main)) {
-        fprintf(stderr, "Main is not callable\n");
+        fprintf(stderr, "Main is not callable, got %d\n", main->type);
         exit(1);
     }
     vm_closure* main_closure = as_closure(main);
@@ -303,15 +304,8 @@ int vm_exec(VM *vm, int flags) {
             } break;
             case I_GET_GLOBAL: {
                 // the name of our string is reference in bytecode's constants by index
+                // this string is interned and only 1 instance of it is kept.
                 vm_string *name = READ_STRING();
-
-                // TODO: can i do this in comptime?
-                vm_string* dupe = table_find_string(vm->strings, &name->contents, name->hash);
-                if(dupe) {
-                    name=dupe;
-                } else {
-                    table_set(vm->strings, name, lobj_num(1));
-                }
 #ifdef DEBUG
                 printf("GET GLOBAL "); printf("%s\n", SOLID_STR_TO_C(name->contents));
 #endif
@@ -331,14 +325,6 @@ int vm_exec(VM *vm, int flags) {
                 printf("I_SET_GLOBAL "); printf("%s ", SOLID_STR_TO_C(name->contents));
 #endif
 
-                //check intern
-                // TODO: can i do this in comptime?
-                vm_string* dupe = table_find_string(vm->strings, &name->contents, name->hash);
-                if(dupe) {
-                    name=dupe;
-                } else {
-                    table_set(vm->strings, name, lobj_num(1));
-                }
                 lobj value = vm_peek(vm, 0);
 #ifdef DEBUG
                 lobj_println(&value);
@@ -363,5 +349,9 @@ int vm_exec(VM *vm, int flags) {
 }
 
 void vm_free(VM* vm) {
-    printf("Need to manage vm memory\n");
+    table_free(vm->globals);
+    table_free(vm->strings);
+
+    vm->frame_count=0;
+
 }

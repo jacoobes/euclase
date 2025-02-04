@@ -47,6 +47,7 @@ void local_init(Local* lc, const solid_str name, const int depth, const int reg)
     lc->reg=reg;
     lc->name=name;
 }
+
 Local local_create(const solid_str name, const int depth, const int reg) {
     Local ret;
     local_init(&ret, name, depth, reg);
@@ -63,6 +64,10 @@ typedef struct LocalChart {
 } LocalChart;
 
 void localchart_init(LocalChart* lc) {
+    if (lc==NULL) {
+        printf("localchart_init: NULL\n");
+        exit(1);
+    }
     lc->cur_depth = 0;
     darray_init(lc->locals);
 }
@@ -103,7 +108,7 @@ void localchart_enter_scope(LocalChart* lc) {
     lc->cur_depth++;
 }
 
-int localchart_resolvesymbol(const LocalChart* lc, const char* symbol) {
+int localchart_resolve_symbol(const LocalChart* lc, const char* symbol) {
     int found = -1;
 
     Local* local;
@@ -135,7 +140,7 @@ int localchart_insert(LocalChart *lc, const char* symbol) {
 typedef struct CompileUnit {
     darray(uint8_t) bytes;
     darray(lobj) constants;
-    LocalChart locals_chart;
+    LocalChart* locals_chart;
     //owned: need to free this
     char* name;
     int arity;
@@ -143,91 +148,130 @@ typedef struct CompileUnit {
 } CompileUnit;
 
 // name is duplicated, need to manage memory
-CompileUnit compileunit_create(const char* name, const int arity) {
-    LocalChart lc = localchart_create();
+CompileUnit* compileunit_create(const char* name, const int arity) {
+    LocalChart* lc = malloc(sizeof(LocalChart));
+    localchart_init(lc);
     // add function name to the 0th slot in locals
-    darray_push(lc.locals, local_create(solid_str_new(name), 0, 0));
-    return (CompileUnit){
-        .next=NULL,
-        .bytes=darray_new(),
-        .constants=darray_new(),
-        .name=strdup(name),
-        .arity=arity,
-        .locals_chart = lc
-    };
+    darray_push(lc->locals, local_create(solid_str_new(name), 0, 0));
+    CompileUnit* cu = malloc(sizeof(CompileUnit));
+        cu->next=NULL;
+        darray_init(cu->bytes);
+        darray_init(cu->constants);
+        //duplicate the string name
+        cu->name=strdup(name);
+        cu->arity=arity;
+        cu->locals_chart = lc;
+    return cu;
 }
 void compileunit_free(CompileUnit* cu) {
-    // TODO
+    if (!cu) return;
+    free(cu->name);
+
+    // NOTE:
+    // VM takes the ownership of compile unit, so we don't need to free the compiler units
+
+    localchart_free(cu->locals_chart);
 }
 
 
+// a compile unit is transformed into a lobj of type OBJ with CLOSURE via copy
+lobj compile_unit_get_closure(const CompileUnit* cu) {
+    if (!cu) {
+        printf("compile_unit_get_closure: NULL\n");
+        exit(1);
+    };
+
+    //this is realllllly ugly lol
+    return into_lobj(LVAL_OBJ, vm_closure_create(
+                                        vm_function_create(cu->bytes.item, darray_size(cu->bytes),
+                                                              cu->constants.item, darray_size(cu->constants),
+                                                              cu->arity, lobj_str(cu->name))));
+}
+
 typedef struct {
-    darray(CompileUnit) units;
+    darray(CompileUnit*) units;
+    // current_unit belongs to units, so when we clean up, we set to NULL, and then
+    // just free units
     CompileUnit* current_unit;
     HashTable* globals;
     HashTable* strings;
 } Compiler;
+
 
 void compiler_append_unit(Compiler* compiler, const char* name, const int arity) {
     darray_append(compiler->units, compileunit_create(name, arity));
 
 }
 
-static inline CompileUnit* compiler_peekunit (const Compiler* compiler) {
-    size_t size = darray_size(compiler->units);
+static inline CompileUnit* compiler_peek_unit (const Compiler* compiler) {
+    const size_t size = darray_size(compiler->units);
     if (size == 0) {
         printf("Error: No units to peek!\n");
         return NULL;
     }
-    return &darray_item(compiler->units, size-1);
+    return darray_item(compiler->units, size-1);
 }
 
 
-static inline CompileUnit* compiler_cur_compileunit (const Compiler* compiler) {
+static inline CompileUnit* compiler_cur_compile_unit (const Compiler* compiler) {
     return compiler->current_unit;
 }
 
 void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
     darray_init(compiler->units);
     compiler_append_unit(compiler, "__main__", 0);
-    compiler->current_unit= &darray_item(compiler->units, 0);
+    compiler->current_unit= darray_item(compiler->units, 0);
 
     compiler->globals=globals;
     compiler->strings=strings;
 
 }
 
-void compiler_destroy(const Compiler *compiler) {
-    CompileUnit* cu;
+void compiler_destroy(Compiler *compiler) {
+    compiler->current_unit = NULL;
+    CompileUnit** cu;
     darray_foreach(cu, compiler->units) {
-        free(cu->name);
+        compileunit_free(*cu);
     }
 }
 
-static inline int compiler_writebyte(const Compiler *compiler, const uint8_t byte) {
-    CompileUnit* cur_unit = compiler_cur_compileunit(compiler);
+static inline int compiler_write_byte(const Compiler *compiler, const uint8_t byte) {
+    CompileUnit* cur_unit = compiler_cur_compile_unit(compiler);
     darray_push(cur_unit->bytes, byte);
     return darray_size(cur_unit->bytes)-1;
 }
 
-// adds constant to current units' compiler pool. Returns the size of array after pushing
-static inline int compiler_add_const(const Compiler *compiler, lobj constant) {
-    CompileUnit* cur_compileunit = compiler_cur_compileunit(compiler);
+// adds value to current units' compiler pool. Returns the size of array after pushing
+static inline int compiler_add_const(const Compiler *compiler, const lobj value) {
+    CompileUnit* cu = compiler_cur_compile_unit(compiler);
+    if (IS_STR(value)) {
+        vm_string* str = AS_STR(value);
+        const vm_string* dupe = table_find_string(compiler->strings, &str->contents, str->hash);
 
-    darray_push(cur_compileunit->constants, constant);
-    return darray_size(cur_compileunit->constants);
+        // if dupe doesn't exist (it's new)
+        if(!dupe) {
+            darray_push(cu->constants, value);
+            table_set(compiler->strings, str, lobj_num(1));
+            return darray_size(cu->constants);
+        }
+        darray_push(cu->constants, into_lobj(LVAL_OBJ, dupe));
+        vm_string_free(str);
+        return darray_size(cu->constants);
+    }
+    darray_push(cu->constants, value);
+    return darray_size(cu->constants);
 }
 
 // emits I_LOAD and adds constant to current unit's compiler pool
 static inline void compiler_load_const(const Compiler* compiler, lobj constant) {
-    compiler_writebyte(compiler, I_LOAD);
+    compiler_write_byte(compiler, I_LOAD);
 #ifdef DEBUG
-    printf("I_LOAD "); lobj_print(&constant); printf(" to %s\n", compiler_cur_compileunit(compiler)->name);
+    printf("I_LOAD "); lobj_print(&constant); printf(" to %s\n", compiler_cur_compile_unit(compiler)->name);
 #endif
 
 
     compiler_add_const(compiler, constant);
-    compiler_writebyte(compiler, darray_size(compiler_cur_compileunit(compiler)->constants) - 1);
+    compiler_write_byte(compiler, darray_size(compiler_cur_compile_unit(compiler)->constants) - 1);
 }
 
 
@@ -240,7 +284,7 @@ char* read_file(const char *filename, size_t *size_read) {
 
     // Get file size
     fseek(file, 0, SEEK_END);
-    long file_size = ftell(file);
+    const long file_size = ftell(file);
     rewind(file);
 
     // Allocate buffer for entire file content
@@ -259,7 +303,7 @@ char* read_file(const char *filename, size_t *size_read) {
     return buffer;
 }
 
-SExpr* expect_next_form(SExprType ty, SExpr* exp, char* assert_msg) {
+SExpr* expect_next_form(const SExprType ty, SExpr* exp, char* assert_msg) {
     SExpr* rest = sexpr_list_rest(exp);
     if(ty == sexpr_list_first(rest)->type) {
         return rest;
@@ -276,32 +320,32 @@ static inline void emit_bin_op(Compiler* compiler, const enum Instruction op, SE
         SExpr* hd = sexpr_list_first(cur);
         emit(compiler, hd);
     }
-    compiler_writebyte(compiler, op);
+    compiler_write_byte(compiler, op);
 }
 
 int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruction) {
-    compiler_writebyte(compiler,instruction); //0
+    compiler_write_byte(compiler,instruction); //0
     //short
-    int jmp_instruct_loc = compiler_writebyte(compiler, 0xff); //1 placeholder
-                           compiler_writebyte(compiler, 0xff); //2 placeholder
+    int jmp_instruct_loc = compiler_write_byte(compiler, 0xff); //1 placeholder
+                           compiler_write_byte(compiler, 0xff); //2 placeholder
     //end short
     return jmp_instruct_loc;
 }
 
 void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc) {
-    const CompileUnit* cur_unit = compiler_cur_compileunit(compiler);
+    const CompileUnit* cur_unit = compiler_cur_compile_unit(compiler);
     
     cur_unit->bytes.item[ushort_begin] = (jump_loc >> 8) & 0xff;
     cur_unit->bytes.item[ushort_begin+1] = jump_loc & 0xff;
 }
 void compiler_write_ushort(const Compiler* compiler, unsigned short jump_loc) {
-    CompileUnit* cur_unit = compiler_cur_compileunit(compiler);
+    CompileUnit* cur_unit = compiler_cur_compile_unit(compiler);
     darray_push(cur_unit->bytes, (jump_loc >> 8) & 0xff );
     darray_push(cur_unit->bytes, jump_loc & 0xff);
 }
-
-void emit(Compiler* compiler, SExpr *expr) {
-    SExpr *cur = expr;
+// emit essentially transitions parsing lifetime to compile lifetime
+void emit(Compiler* compiler, SExpr *sexpr) {
+    SExpr *cur = sexpr;
     switch (cur->type) {
         case SEXPR_NUMBER: {
             lobj snum = lobj_num(cur->value.number);
@@ -313,24 +357,33 @@ void emit(Compiler* compiler, SExpr *expr) {
         case SEXPR_SYMBOL: {
             const char *symbol = cur->value.symbol;
 
-            const int local_index = localchart_resolvesymbol(&compiler->current_unit->locals_chart,symbol);
+            const int local_index = localchart_resolve_symbol(compiler->current_unit->locals_chart,symbol);
             if (local_index != -1) {
 #ifdef DEBUG
                 printf("emitting symbol: I_GET_LOCAL %s, %d\n", symbol, local_index); ;
 #endif
-                compiler_writebyte(compiler,  I_GET_LOCAL);
-                compiler_writebyte(compiler,  local_index);
+                compiler_write_byte(compiler,  I_GET_LOCAL);
+                compiler_write_byte(compiler,  local_index);
             } else {
+                // str dupe symbol
                 const int new_size = compiler_add_const(compiler, lobj_str(symbol));
-                compiler_writebyte(compiler,I_GET_GLOBAL);
-                compiler_writebyte(compiler, new_size-1);
+
+                compiler_write_byte(compiler,I_GET_GLOBAL);
+                compiler_write_byte(compiler, new_size-1);
             }
         }
         break;
         case SEXPR_STRING: {
-            const char *str = cur->value.string;
-            //todo: check in table for existence to reuse str object
-            compiler_load_const(compiler, lobj_str(str));
+            vm_string* str = vm_string_create(cur->value.string);
+            const vm_string* dupe = table_find_string(compiler->strings, &str->contents, str->hash);
+            // if dupe doesn't exist (it's new)
+            if(!dupe) {
+                compiler_load_const(compiler, into_lobj(LVAL_OBJ, str));
+                table_set(compiler->strings, str, lobj_num(1));
+            } else {
+                compiler_load_const(compiler, into_lobj(LVAL_OBJ, dupe));
+                vm_string_free(str);
+            }
         }
         break;
         case SEXPR_LIST: {
@@ -361,16 +414,16 @@ void emit(Compiler* compiler, SExpr *expr) {
                     printf("emitting fn: %s\n", fn_name->value.symbol);
 #endif
 
-                    // first class functions are just variables in disguise, thats why clojure's
+                    // first class functions are just variables in disguise, that's why clojure's
                     // defn is just syntax over def and f
 
 
                     compiler_append_unit(compiler, fn_name->value.symbol, sexpr_list_len(args));
-                    compiler->current_unit = &darray_pop(compiler->units);
+                    compiler->current_unit = darray_pop(compiler->units);
 
 
                     //enter the scope of the currently compiling function
-                    localchart_enter_scope(&compiler->current_unit->locals_chart);
+                    localchart_enter_scope(compiler->current_unit->locals_chart);
 
                     SExpr* arg;
                     sexpr_list_foreach(arg, args) {
@@ -382,7 +435,7 @@ void emit(Compiler* compiler, SExpr *expr) {
                             printf("arg must be simple symbol");
                             exit(1);
                         }
-                        int result = localchart_insert(&compiler->current_unit->locals_chart, el->value.symbol);
+                        localchart_insert(compiler->current_unit->locals_chart, el->value.symbol);
                         //printf(result != -1 ? "inserted\n" : "removed\n");
                     };
 
@@ -400,13 +453,12 @@ void emit(Compiler* compiler, SExpr *expr) {
 #endif
                         compiler_load_const(compiler, lobj_num(0));
                     }
-                    compiler_writebyte(compiler, I_RETURN);
+                    compiler_write_byte(compiler, I_RETURN);
 
 
-                    const CompileUnit* cu = compiler_cur_compileunit(compiler);
-                    const lobj new_fn = lobj_func(cu->bytes.item, darray_size(cu->bytes),
-                                                      cu->constants.item, darray_size(cu->constants),
-                                                      cu->arity, lobj_str(cu->name));
+                    const CompileUnit* cu = compiler_cur_compile_unit(compiler);
+
+                    const lobj new_closure = compile_unit_get_closure(cu);
 
 
 #ifdef DEBUG
@@ -421,13 +473,12 @@ void emit(Compiler* compiler, SExpr *expr) {
                     // Return to previous pointer as current unit. that is,
                     // the one before appending the unit ( size - 2)
 
-                    compiler->current_unit = compiler_peekunit(compiler);
-                    compiler_load_const(compiler, new_fn);
-                    compiler_writebyte(compiler, I_CLOSURE);
+                    compiler->current_unit = compiler_peek_unit(compiler);
+                    compiler_load_const(compiler, new_closure);
 
                     const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
-                    compiler_writebyte(compiler, I_SET_GLOBAL);
-                    compiler_writebyte(compiler, str_loc-1);
+                    compiler_write_byte(compiler, I_SET_GLOBAL);
+                    compiler_write_byte(compiler, str_loc-1);
                 }
                 else if(strcmp(symbol, "+") == 0) { emit_bin_op(compiler, I_ADD, rest); }
                 else if(strcmp(symbol, "-") == 0) { emit_bin_op(compiler, I_SUB, rest); }
@@ -439,7 +490,7 @@ void emit(Compiler* compiler, SExpr *expr) {
                 else if (strcmp(symbol, "let") == 0) { //locally scoped variables
                     SExpr* bindings = sexpr_list_first(rest);
                     int even = 1;
-                    localchart_enter_scope(&compiler->current_unit->locals_chart);
+                    localchart_enter_scope(compiler->current_unit->locals_chart);
 
                     SExpr* cur_exp;
                     sexpr_list_foreach(cur_exp, bindings) {
@@ -458,8 +509,8 @@ void emit(Compiler* compiler, SExpr *expr) {
                         SExpr* rhs = sexpr_list_first(next);
                         emit(compiler, rhs);
 
-                        const int reg = localchart_insert(&compiler->current_unit->locals_chart, lhs->value.symbol);
-                        compiler_writebyte(compiler, I_SET_LOCAL); compiler_writebyte(compiler, reg);
+                        const int reg = localchart_insert(compiler->current_unit->locals_chart, lhs->value.symbol);
+                        compiler_write_byte(compiler, I_SET_LOCAL); compiler_write_byte(compiler, reg);
                         even+=1;
                         cur_exp = next;
                     }
@@ -468,10 +519,10 @@ void emit(Compiler* compiler, SExpr *expr) {
                     sexpr_list_foreach(b_form, let_body) {
                         emit(compiler, sexpr_list_first(b_form));
                     }
-                    const size_t removed = localchart_leave_scope(&compiler->current_unit->locals_chart);
+                    const size_t removed = localchart_leave_scope(compiler->current_unit->locals_chart);
                     printf("removed %zu\n", removed);
                     for(int i = 0; i < removed; i++ ) {
-                        compiler_writebyte(compiler, I_POP);
+                        compiler_write_byte(compiler, I_POP);
                     }
 
                 } else if (strcmp(symbol, "var") == 0) { //global variable
@@ -490,11 +541,11 @@ void emit(Compiler* compiler, SExpr *expr) {
                     emit(compiler,value);
 
                     const int str_loc = compiler_add_const(compiler, lobj_str(varname->value.symbol));
-                    compiler_writebyte(compiler, I_SET_GLOBAL);
-                    compiler_writebyte(compiler, str_loc);
+                    compiler_write_byte(compiler, I_SET_GLOBAL);
+                    compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
                     #define BYTELEN \
-                        (darray_size(compiler_cur_compileunit(compiler)->bytes))
+                        (darray_size(compiler_cur_compile_unit(compiler)->bytes))
                     //condition
                     emit(compiler, sexpr_list_first(rest));
                     // emit a jmp if falsy
@@ -523,13 +574,13 @@ void emit(Compiler* compiler, SExpr *expr) {
                 } else if (strcmp(symbol, "and") == 0) {
                     // evaluate first. if false, evaluate second one
                     #define BYTELEN \
-                        (darray_size(compiler_cur_compileunit(compiler)->bytes))
+                        (darray_size(compiler_cur_compile_unit(compiler)->bytes))
 
                     // emit first
                     emit(compiler, sexpr_list_first(rest));
 
-                    int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY);
-                    int cur_size = BYTELEN;
+                    const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY);
+                    const int cur_size = BYTELEN;
 
                     rest = sexpr_list_rest(rest);
                     // emit second
@@ -543,29 +594,29 @@ void emit(Compiler* compiler, SExpr *expr) {
                 } else if (strcmp(symbol, "while") == 0) {
 
                     #define BYTELEN \
-                        (darray_size(compiler_cur_compileunit(compiler)->bytes))
+                        (darray_size(compiler_cur_compile_unit(compiler)->bytes))
 
                     //condition
                     emit(compiler, sexpr_list_first(rest));
-                    int loop_back_loc = BYTELEN;
-                    int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY); // returns where the ushort begins +2
+                    const int loop_back_loc = BYTELEN;
+                    const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY); // returns where the ushort begins +2
 
-                    compiler_writebyte(compiler, I_POP);  
+                    compiler_write_byte(compiler, I_POP);
                     rest = sexpr_list_rest(rest);
                     emit(compiler, sexpr_list_first(rest)); 
-                    compiler_writebyte(compiler, I_LOOP); 
+                    compiler_write_byte(compiler, I_LOOP);
                     compiler_write_ushort(compiler, BYTELEN - loop_back_loc + 2); 
                     compiler_jump_patch(compiler, ushort_begin, BYTELEN-ushort_begin-2);
                     #undef BYTELEN
 
                 } else if(symbol[0] == '@')  {
                     const char* ident = symbol+1;
-                    const size_t local_index = localchart_resolvesymbol(&compiler->current_unit->locals_chart,ident);
+                    const size_t local_index = localchart_resolve_symbol(compiler->current_unit->locals_chart,ident);
                     if (local_index != -1) {
                         SExpr* new_value = sexpr_list_first(rest);
                         emit(compiler, new_value);
-                        compiler_writebyte(compiler, I_SET_LOCAL);
-                        compiler_writebyte(compiler, local_index);
+                        compiler_write_byte(compiler, I_SET_LOCAL);
+                        compiler_write_byte(compiler, local_index);
                     } else {
                         //todo: string intern, check for existence
 
@@ -578,20 +629,21 @@ void emit(Compiler* compiler, SExpr *expr) {
                         exit(1);
                     }
 
-                    //emit I_GET_GLOBAL symbol
 #ifdef DEBUG
-                    printf("emitting call");
+                    printf("emitting call\n");
 #endif
-                    // emit a get global op
+                    //emit I_GET_GLOBAL symbol
                     emit(compiler, list_head);
 
                     SExpr* cur_exp;
                     //emit bytecode for arguments
-                    sexpr_list_foreach(cur_exp, rest) { emit(compiler, sexpr_list_first(cur_exp)); }
+                    sexpr_list_foreach(cur_exp, rest) {
+                        emit(compiler, sexpr_list_first(cur_exp));
+                    }
 
                     // need to emit I_CALL N where N is number of args
-                    compiler_writebyte(compiler, I_CALL);
-                    compiler_writebyte(compiler, argc);
+                    compiler_write_byte(compiler, I_CALL);
+                    compiler_write_byte(compiler, argc);
 #ifdef DEBUG
                     printf("emitting: I_CALL %d for %s\n", argc, symbol);
 #endif
@@ -617,17 +669,18 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* buffer ="(fn (fact (x))"
+            const char* fib ="(fn (fact (x))"
                                 "   (if (<= x 2) x  (* x (fact (- x 1)))))"
             " (fact 10)";
-
-            if (!buffer) {
+            const char* global_vars = "(var a 5)\n"
+                                            "(+ a (+ 120 1))\n";
+            if (!fib) {
                 return 1;  // Error already printed in read_file
             }
 
-            printf("program:\n '%s'\n", buffer);
+            printf("program:\n '%s'\n", global_vars);
             size_t count;
-            SExpr **exprs = read_all(buffer, &count); // or read appropriate function
+            SExpr **exprs = read_all(global_vars, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
 
             HashTable globals, strings;
@@ -639,80 +692,83 @@ int main(int argc, char **argv) {
             for (size_t i = 0; i < count; i++) {
                 emit(&compiler, exprs[i]);
             }
-            
 
-            CompileUnit* mmain= &darray_item(compiler.units, 0);
-
-            if(mmain == NULL) {
-                printf("main function entry point not found");
-                exit(1);
-            }
-
-            darray_push(mmain->bytes, I_RETURN);
-            lobj main = into_lobj(LVAL_OBJ,
-                        vm_closure_create(vm_function_create(mmain->bytes.item, darray_size(mmain->bytes), 
-                                                             mmain->constants.item, darray_size(mmain->constants),
-                                                             0, lobj_str("__main__"))));
-#ifdef DEBUG
-            uint8_t* b;
-            darray_foreach(b, mmain->bytes) {
-                printf("%d ", *b);
-            }
-            printf("\n");
-#endif
-            VM vm;
-            vm_create(&vm, &globals, &strings, &main);
-            vm_exec(&vm, 0);
-
+            // done with s expressions. we free all of them
             for(int i =0; i < count; i++) {
                 free_sexpr(exprs[i]);
             }
 
-            table_free(&globals);
-            table_free(&strings);
+            CompileUnit* main_fn= darray_item(compiler.units, 0);
+            if(main_fn == NULL) {
+                printf("main function entry point not found");
+                exit(1);
+            }
+            darray_push(main_fn->bytes, I_RETURN);
+
+
+            lobj main = compile_unit_get_closure(main_fn);
+#ifdef DEBUG
+            uint8_t* b;
+            darray_foreach(b, main_fn->bytes) {
+                printf("%d ", *b);
+            }
+            printf("\n");
+#endif
+            // lifetime of compiler is done.
+            // I have transformed all compile units into functions / constants
             compiler_destroy(&compiler);
- 
+
+            VM vm;
+            vm_create(&vm, &globals, &strings, &main);
+            vm_exec(&vm, 0);
+
+
+
+            vm_free(&vm);
+
         } else {
             return 1;
         }
     } else {
-        while (true) {
-            char *input = readline(">> ");
-            if (input && *input)
-                add_history(input);
-            else {
-                continue;
-            }
-            size_t count;
-            SExpr** exprs = read_all(input, &count);
-
-            HashTable globals, strings;
-            table_create(&globals);
-            table_create(&strings);
-
-            Compiler compiler;
-            compiler_create(&compiler, &globals, &strings);
-
-            for (size_t i = 0; i < count; i++) {
-                printf("Emitting bytecode for form:"); print_sexpr(exprs[i]);
-                emit(&compiler, exprs[i]);
-            }
-
-            printf("\n");
-            for (size_t i = 0; i < count; i++) {
-                print_sexpr(exprs[i]);
-                printf(" ");
-            }
-            printf("\n");
-            //free(input);
-            printf("Num expressions: %zu\n", count);
-            for (size_t i = 0; i < count; i++) {
-                free_sexpr(exprs[i]);
-            }
-            table_free(&globals);
-            table_free(&strings);
-            compiler_destroy(&compiler);
-        }
+        // while (true) {
+        //     char *input = readline(">> ");
+        //     if (input && *input)
+        //         add_history(input);
+        //     else {
+        //         continue;
+        //     }
+        //     Arena a = {.begin=NULL, .end=NULL};
+        //     arena_alloc(&a, 65536);
+        //     size_t count;
+        //     SExpr** exprs = read_all(&a, input, &count);
+        //
+        //     HashTable globals, strings;
+        //     table_create(&globals);
+        //     table_create(&strings);
+        //
+        //     Compiler compiler;
+        //     compiler_create(&compiler, &globals, &strings);
+        //
+        //     for (size_t i = 0; i < count; i++) {
+        //         printf("Emitting bytecode for form:"); print_sexpr(exprs[i]);
+        //         emit(&compiler, exprs[i]);
+        //     }
+        //
+        //     printf("\n");
+        //     for (size_t i = 0; i < count; i++) {
+        //         print_sexpr(exprs[i]);
+        //         printf(" ");
+        //     }
+        //     printf("\n");
+        //     //free(input);
+        //     printf("Num expressions: %zu\n", count);
+        //     for (size_t i = 0; i < count; i++) {
+        //         free_sexpr(exprs[i]);
+        //     }
+        //     table_free(&globals);
+        //     table_free(&strings);
+        //     compiler_destroy(&compiler);
+        // }
     }
     return 0;
 }

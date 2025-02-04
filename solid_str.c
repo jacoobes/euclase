@@ -30,7 +30,7 @@ char solid_str_at(solid_str* s, int idx) {
     return -1;
 }
 
-int solid_strcmp(solid_str* s1, solid_str* s2) {
+int solid_strcmp(const solid_str* s1, const solid_str* s2) {
     return strcmp(SOLID_STR_TO_C(*s1), SOLID_STR_TO_C(*s2));
 }
 

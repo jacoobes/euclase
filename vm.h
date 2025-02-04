@@ -45,7 +45,9 @@ enum Instruction {
 
 typedef struct {
     uint8_t* ip;
+    // a pointer to a closure, we dont need to free this.
     vm_closure* closure;
+    // we do not need to free this: points to somewhere on the stack
     lobj* slots; //the reference to the stack that the function can use
 
 } CallFrame;
@@ -101,7 +103,7 @@ int vm_exec(VM*, int);
  *
  * @param vm Pointer to the VM instance to be freed.
  */
-void vm_free(VM* vm);
+void vm_free(const VM* vm);
 
 
 solid_str vm_stacktrace(VM* vm, char* error);
