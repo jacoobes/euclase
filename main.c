@@ -356,7 +356,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
         } break;
         case SEXPR_SYMBOL: {
             const char *symbol = cur->value.symbol;
-
             const int local_index = localchart_resolve_symbol(compiler->current_unit->locals_chart,symbol);
             if (local_index != -1) {
 #ifdef DEBUG
@@ -367,7 +366,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
             } else {
                 // str dupe symbol
                 const int new_size = compiler_add_const(compiler, lobj_str(symbol));
-
                 compiler_write_byte(compiler,I_GET_GLOBAL);
                 compiler_write_byte(compiler, new_size-1);
             }

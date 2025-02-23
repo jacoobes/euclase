@@ -289,7 +289,7 @@ int vm_exec(VM *vm, int flags) {
             case I_LOOP: {
                 uint16_t jump = READ_SHORT();
 #ifdef DEBUG
-                printf("I_LOOP %zu\n", jump);
+                printf("I_LOOP %d\n", jump);
 #endif
                 // when going backwards in the opcode, you must ensure that you account for the offset of 3 
                 // for the 2 bytes in the short and the LOOP instruction (one byte)
@@ -349,9 +349,7 @@ int vm_exec(VM *vm, int flags) {
 
 }
 
-void vm_free(VM* vm) {
+void vm_free(const VM* vm) {
     table_free(vm->globals);
     table_free(vm->strings);
-    vm->frame_count=0;
-
 }
