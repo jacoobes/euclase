@@ -1,13 +1,38 @@
 # solid waffle (name to change)
-
 - [Virtual Machine](#virtual-machine-specification)
 - [Language Specification](#language-specification)
 - [Assembler](#assembler)
+
+Build system = [xmake](https://xmake.io/#/)
+  
+To build:
+```
+xmake build
+```
+To run:
+```
+xmake run main
+```
+Assembler:
+```
+xmake run asm
+```
+Tests:
+```
+xmake run -g test
+```
 
 ## Virtual Machine Specification
 
 The virtual machine is a bytecode based interpreter which is inspired from [Crafting Interpreters](https://craftinginterpreters.com/),
 which was also inspired by the excellent [Lua interpreter](https://www.lua.org/doc/jucs05.pdf)
+
+### design choices
+- Stack based, for simplicity over complexity of register based virtual machines
+- simple C codebase, no language bloat from C++ or other family
+- Avoid unnecessary abstraction
+- The only dependency was copy and pasted from [ccan code archive](https://github.com/rustyrussell/ccan/blob/master/ccan/darray/darray.h).
+    - If I add coroutines, this may not be the only dependency. that stuff too hard for me
 
 **Note (02 / 23 / 25)** The opcodes and format of bytecode are still subject to change.
 
@@ -210,7 +235,7 @@ Only `while` loops are implemented. The result of the last iteration is returned
 
 ### Assembler
 
-
+... todo
 
 
 ## todo
