@@ -34,6 +34,8 @@ void add_history(char *unused) {}
 #include "darray.h"  // Assuming you have a header file defining the darray macros and functions
 
 
+#define UINT8_COUNT (UINT8_MAX + 1)
+
 typedef struct Local {
     solid_str name;
     size_t depth;
@@ -136,15 +138,22 @@ int localchart_insert(LocalChart *lc, const char* symbol) {
     return prev_size;
 }
 
+typedef struct  { 
+    int index;
+    bool is_local;
+} Upvalue;
 
 typedef struct CompileUnit {
     darray(uint8_t) bytes;
     darray(lobj) constants;
+
+    Upvalue upvalues[UINT8_COUNT];
+    int upvalue_count;
+
     LocalChart* locals_chart;
     //owned: need to free this
     char* name;
     int arity;
-    struct CompileUnit* next;
 } CompileUnit;
 
 // name is duplicated, need to manage memory
@@ -154,13 +163,18 @@ CompileUnit* compileunit_create(const char* name, const int arity) {
     // add function name to the 0th slot in locals
     darray_push(lc->locals, local_create(solid_str_new(name), 0, 0));
     CompileUnit* cu = malloc(sizeof(CompileUnit));
-        cu->next=NULL;
-        darray_init(cu->bytes);
-        darray_init(cu->constants);
-        //duplicate the string name
-        cu->name=strdup(name);
-        cu->arity=arity;
-        cu->locals_chart = lc;
+    darray_init(cu->bytes);
+    darray_init(cu->constants);
+
+    //duplicate the string name
+    cu->name=strdup(name);
+
+    cu->arity=arity;
+    cu->locals_chart = lc;
+
+    
+    cu->upvalue_count = 0;
+
     return cu;
 }
 void compileunit_free(CompileUnit* cu) {
@@ -184,8 +198,8 @@ lobj compile_unit_get_closure(const CompileUnit* cu) {
     //this is realllllly ugly lol
     return into_lobj(LVAL_OBJ, vm_closure_create(
                                         vm_function_create(cu->bytes.item, darray_size(cu->bytes),
-                                                              cu->constants.item, darray_size(cu->constants),
-                                                              cu->arity, lobj_str(cu->name))));
+                                                           cu->constants.item, darray_size(cu->constants),
+                                                           cu->arity, lobj_str(cu->name))));
 }
 
 typedef struct {
@@ -338,11 +352,44 @@ void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t j
     cur_unit->bytes.item[ushort_begin] = (jump_loc >> 8) & 0xff;
     cur_unit->bytes.item[ushort_begin+1] = jump_loc & 0xff;
 }
+
+
+
 void compiler_write_ushort(const Compiler* compiler, unsigned short jump_loc) {
     CompileUnit* cur_unit = compiler_cur_compile_unit(compiler);
     darray_push(cur_unit->bytes, (jump_loc >> 8) & 0xff );
     darray_push(cur_unit->bytes, jump_loc & 0xff);
 }
+
+
+
+
+int resolve_upvalue(Compiler* compiler, char* symbol) { 
+    return 0;
+}
+
+int add_upvalue(Compiler* compiler, uint8_t index, bool is_local  ) {
+    CompileUnit* cu = compiler_cur_compile_unit(compiler);
+    
+
+    // find duplicates for upvalue, since a "closure may reference the same variable in a surrounding function multiple times" 
+    for (int i = 0; i < cu->upvalue_count; i++) {
+        Upvalue* upv = &cu->upvalues[i]; 
+        if(upv->index == index && upv->is_local == is_local) {
+            return i; 
+        }
+    }
+    if (cu->upvalue_count == UINT8_MAX) {
+        printf("Maximum upvalue count exceeded: %d\n", UINT8_MAX);
+        exit(1);
+    }
+
+    cu->upvalues[cu->upvalue_count].index = index;
+    cu->upvalues[cu->upvalue_count].is_local = false;
+    return cu->upvalue_count++;
+}
+
+
 // emit essentially transitions parsing lifetime to compile lifetime
 void emit(Compiler* compiler, SExpr *sexpr) {
     SExpr *cur = sexpr;
@@ -414,8 +461,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
 
                     // first class functions are just variables in disguise, that's why clojure's
                     // defn is just syntax over def and f
-
-
                     compiler_append_unit(compiler, fn_name->value.symbol, sexpr_list_len(args));
                     compiler->current_unit = darray_pop(compiler->units);
 
@@ -438,51 +483,40 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     };
 
                     if (sexpr_list_len(body)) {
-#ifdef DEBUG
-                        printf("\temitting in function: has a body\n");
-#endif
                         SExpr* cur_exp;
                         sexpr_list_foreach(cur_exp, body) {
                             emit(compiler, sexpr_list_first(cur_exp));
                         };
                     } else {
-#ifdef DEBUG
-                        printf("\temitting in function: has no body\n");
-#endif
                         compiler_load_const(compiler, lobj_num(0));
                     }
                     compiler_write_byte(compiler, I_RETURN);
 
 
                     const CompileUnit* cu = compiler_cur_compile_unit(compiler);
-
                     const lobj new_closure = compile_unit_get_closure(cu);
 
-
 #ifdef DEBUG
-                    // CompileUnit* cla;
-                    // printf("compile units found:\n");
-                    // darray_foreach(cla, compiler->units) {
-                    //     printf("%s,", cla->name);
-                    // }
-                    // printf(" cur unit '%s' \n", cu->name);
+                
                     printf("emitting function done %s\n", fn_name->value.symbol);
 #endif
-                    // Return to previous pointer as current unit. that is,
-                    // the one before appending the unit ( size - 2)
 
+
+                    // Return to previous pointer as current unit. 
                     compiler->current_unit = compiler_peek_unit(compiler);
+                    // adding the closure unit into the constant pool
                     compiler_load_const(compiler, new_closure);
 
+                    // the closure's name is set as a global variable
                     const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
                     compiler_write_byte(compiler, I_SET_GLOBAL);
                     compiler_write_byte(compiler, str_loc-1);
                 }
-                else if(strcmp(symbol, "+") == 0) { emit_bin_op(compiler, I_ADD, rest); }
-                else if(strcmp(symbol, "-") == 0) { emit_bin_op(compiler, I_SUB, rest); }
-                else if(strcmp(symbol, "/") == 0) { emit_bin_op(compiler, I_DIV, rest); }
-                else if(strcmp(symbol, "*") == 0) { emit_bin_op(compiler, I_MUL, rest); }
-                else if(strcmp(symbol, "%") == 0) { emit_bin_op(compiler, I_MOD, rest); }
+                else if(strcmp(symbol, "+") == 0)  { emit_bin_op(compiler, I_ADD, rest); }
+                else if(strcmp(symbol, "-") == 0)  { emit_bin_op(compiler, I_SUB, rest); }
+                else if(strcmp(symbol, "/") == 0)  { emit_bin_op(compiler, I_DIV, rest); }
+                else if(strcmp(symbol, "*") == 0)  { emit_bin_op(compiler, I_MUL, rest); }
+                else if(strcmp(symbol, "%") == 0)  { emit_bin_op(compiler, I_MOD, rest); }
                 else if(strcmp(symbol, "<=") == 0) {  emit_bin_op(compiler, I_LTE, rest);}
                 else if(strcmp(symbol, ">") == 0)  {   emit_bin_op(compiler, I_GT, rest);}
                 else if (strcmp(symbol, "let") == 0) { //locally scoped variables
