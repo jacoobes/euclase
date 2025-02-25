@@ -28,7 +28,7 @@ The virtual machine is a bytecode based interpreter which is inspired from [Craf
 which was also inspired by the excellent [Lua interpreter](https://www.lua.org/doc/jucs05.pdf)
 
 ### design choices
-- Stack based, for simplicity over complexity of register based virtual machines
+- **Stack based**, for simplicity of design over register-based virtual machines
 - simple C codebase, no language bloat from C++ or other family
 - Avoid unnecessary abstraction
 - The only dependency was copy and pasted from [ccan code archive](https://github.com/rustyrussell/ccan/blob/master/ccan/darray/darray.h).
@@ -118,6 +118,8 @@ The format below for opcodes is \<NAME\> \<byte\> \<OPS\>
    - Sets an upvalue in a closure. 
 
 ## Language Specification 
+
+
 
 ### comments
 
