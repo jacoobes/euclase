@@ -97,6 +97,7 @@ void lobj_free(lobj* o) {
                 free(fn);
             } break;
             case OBJ_CLOSURE: {
+                // todo: do we need to free the function here?
                 vm_function* fn=(vm_function*)o->v.obj;
                 free(fn->name.v.obj);
                 free(fn);

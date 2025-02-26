@@ -36,7 +36,7 @@ which was also inspired by the excellent [Lua interpreter](https://www.lua.org/d
 
 **Note (02 / 23 / 25)** The opcodes and format of bytecode are still subject to change.
 
-```c
+```
 I_HALT         // End execution 
 I_LOAD         // Load value at index to stack.
 I_NEGATE       // negate a number
@@ -116,6 +116,9 @@ The format below for opcodes is \<NAME\> \<byte\> \<OPS\>
    - Gets an upvalue from a closure.  
 - **I_SET_UPVAL 22 1**  
    - Sets an upvalue in a closure. 
+
+
+
 
 ## Language Specification 
 

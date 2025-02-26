@@ -30,16 +30,19 @@ typedef struct {
   Value v;
 } lobj; //lisp object
 
+
+
 typedef struct {
-  vm_object obj;
-  int arity;
+    vm_object obj;
+    int arity;
 
-  uint8_t* chunk;
-  uint8_t chunk_ct;
+    uint8_t* chunk;
+    uint8_t chunk_ct;
 
-  lobj* values;
-  int values_ct;
-  lobj name;
+    lobj* values;
+    int values_ct;
+
+    lobj name;
 } vm_function;
 
 //immutable wrapper for solid_str which extends a vm_obj

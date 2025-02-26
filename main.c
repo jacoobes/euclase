@@ -147,6 +147,7 @@ typedef struct CompileUnit {
     darray(uint8_t) bytes;
     darray(lobj) constants;
 
+    // upvalues are closed over values that outlive the stack. They point to the index in the stack
     Upvalue upvalues[UINT8_COUNT];
     int upvalue_count;
 
@@ -162,6 +163,7 @@ CompileUnit* compileunit_create(const char* name, const int arity) {
     localchart_init(lc);
     // add function name to the 0th slot in locals
     darray_push(lc->locals, local_create(solid_str_new(name), 0, 0));
+
     CompileUnit* cu = malloc(sizeof(CompileUnit));
     darray_init(cu->bytes);
     darray_init(cu->constants);
@@ -172,9 +174,7 @@ CompileUnit* compileunit_create(const char* name, const int arity) {
     cu->arity=arity;
     cu->locals_chart = lc;
 
-    
     cu->upvalue_count = 0;
-
     return cu;
 }
 void compileunit_free(CompileUnit* cu) {
@@ -183,7 +183,6 @@ void compileunit_free(CompileUnit* cu) {
 
     // NOTE:
     // VM takes the ownership of compile unit, so we don't need to free the compiler units
-
     localchart_free(cu->locals_chart);
 }
 
@@ -348,7 +347,6 @@ int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruct
 
 void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc) {
     const CompileUnit* cur_unit = compiler_cur_compile_unit(compiler);
-    
     cur_unit->bytes.item[ushort_begin] = (jump_loc >> 8) & 0xff;
     cur_unit->bytes.item[ushort_begin+1] = jump_loc & 0xff;
 }
@@ -362,16 +360,22 @@ void compiler_write_ushort(const Compiler* compiler, unsigned short jump_loc) {
 }
 
 
-
-
-int resolve_upvalue(Compiler* compiler, char* symbol) { 
+int resolve_upvalue(Compiler* compiler, const char* symbol) { 
+    // going up the compile-unit stack 
+    // resolving where the upvalue is.
+    // we also know that we checked local symbols already.
+    size_t s = compiler->units.size-1;
+    while (s >= 0) {
+        CompileUnit* cur = darray_item(compiler->units, s);
+        localchart_resolve_symbol(cur->locals_chart, symbol);
+        
+    }
     return 0;
 }
 
 int add_upvalue(Compiler* compiler, uint8_t index, bool is_local  ) {
     CompileUnit* cu = compiler_cur_compile_unit(compiler);
     
-
     // find duplicates for upvalue, since a "closure may reference the same variable in a surrounding function multiple times" 
     for (int i = 0; i < cu->upvalue_count; i++) {
         Upvalue* upv = &cu->upvalues[i]; 
@@ -411,6 +415,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                 compiler_write_byte(compiler,  I_GET_LOCAL);
                 compiler_write_byte(compiler,  local_index);
             } else {
+                int upvalue_location = resolve_upvalue(compiler, symbol);
                 // str dupe symbol
                 const int new_size = compiler_add_const(compiler, lobj_str(symbol));
                 compiler_write_byte(compiler,I_GET_GLOBAL);
@@ -463,7 +468,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // defn is just syntax over def and f
                     compiler_append_unit(compiler, fn_name->value.symbol, sexpr_list_len(args));
                     compiler->current_unit = darray_pop(compiler->units);
-
+                    
 
                     //enter the scope of the currently compiling function
                     localchart_enter_scope(compiler->current_unit->locals_chart);
@@ -553,7 +558,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     }
                     const size_t removed = localchart_leave_scope(compiler->current_unit->locals_chart);
                     printf("removed %zu\n", removed);
-                    for(int i = 0; i < removed; i++ ) {
+                    for(size_t i = 0; i < removed; i++ ) {
                         compiler_write_byte(compiler, I_POP);
                     }
 
@@ -704,15 +709,19 @@ int main(int argc, char **argv) {
             const char* fib ="(fn (fact (x))"
                                 "   (if (<= x 2) x  (* x (fact (- x 1)))))"
             " (fact 10)";
+
             const char* global_vars = "(var a 5)\n"
                                             "(+ a (+ 120 1))\n";
+
+            const char* looper = "(let (a 10) "
+                                    "(while a (@a (- a 1))))";
             if (!fib) {
                 return 1;  // Error already printed in read_file
             }
 
-            printf("program:\n '%s'\n", global_vars);
+            printf("program:\n '%s'\n", looper);
             size_t count;
-            SExpr **exprs = read_all(global_vars, &count); // or read appropriate function
+            SExpr **exprs = read_all(looper, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
 
             HashTable globals, strings;
