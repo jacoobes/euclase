@@ -210,7 +210,6 @@ void test_sexpr_list_read_all2() {
     size_t count2;
     SExpr** b = read_all(input3, &count2);
     assert(b != NULL);
-    printf("%zu\n", count2);
     assert(count2 == 2);
     printf("done: lists2\n");
 }

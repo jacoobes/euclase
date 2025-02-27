@@ -173,10 +173,8 @@ SExpr* read_list(const char* input, int* pos) {
         }
     }
 
-    printf("next '%c'\n", next);
     //skip any trailing whitespace in list
     char ch = skip_whitespace(input, pos);
-    printf("cur '%c'\n", next);
     // skip the ')'
     advance(pos);
     if(!cur) {
@@ -200,10 +198,8 @@ SExpr **read_all(const char *input, size_t *count) {
         SExpr *expr;
         if (cur == '(') {
             expr = read_list(input, &i);
-            printf("when reading list, '%c'\n", input[i]);
         } else {
             expr = read_atom(input, &i);
-            printf("when reading atom, '%c'\n", input[i]);
         }
         if (*count == capacity) {
             capacity = capacity ? capacity * 2 : 1;
