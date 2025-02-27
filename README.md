@@ -130,7 +130,7 @@ The format below for opcodes is \<NAME\> \<byte\> \<OPS\>
 
 ### numbers
 
-numbers are represented as doubles and currently are written as `[0-9]+`
+numbers are represented as doubles
 ```js
 01293102931
 ```
