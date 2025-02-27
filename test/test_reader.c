@@ -215,12 +215,50 @@ void test_sexpr_list_read_all2() {
 }
 
 void test_sexpr_list_adj() {
-    const char* input3 = "(f 10 )(fne 12 )()(())";
+    const char* input3 = "( f 10 )(fne 12 )()(())";
     printf("test_sexpr_list_adj\n");
     size_t count2;
     SExpr** b = read_all(input3, &count2);
     assert(b != NULL);
     assert(count2 == 4);
+    
+    SExpr* form0 = b[0];
+    assert(sexpr_list_first(form0)->type == SEXPR_SYMBOL && strcmp(sexpr_list_first(form0)->value.symbol, "f") == 0);
+    SExpr* rest1 = sexpr_list_rest(form0);
+    assert(rest1 != NULL);
+    SExpr* elem2 = sexpr_list_first(rest1);
+    assert(elem2 != NULL);
+    assert(elem2->type == SEXPR_NUMBER);
+    assert(elem2->value.number == 10);
+
+    SExpr* rest2 = sexpr_list_rest(rest1);
+    assert(rest2 == NULL);
+
+    SExpr* form1 = b[1];
+    assert(sexpr_list_first(form1)->type == SEXPR_SYMBOL && strcmp(sexpr_list_first(form1)->value.symbol, "fne") == 0);
+    SExpr* rest3 = sexpr_list_rest(form1);
+    assert(rest3 != NULL);
+    SExpr* elem4 = sexpr_list_first(rest3);
+    assert(elem4 != NULL);
+    assert(elem4->type == SEXPR_NUMBER);
+    assert(elem4->value.number == 12);
+    SExpr* rest4 = sexpr_list_rest(rest3);
+    assert(rest4 == NULL);
+
+    SExpr* form2 = b[2];
+    assert(form2->type == SEXPR_LIST);
+    assert(sexpr_list_first(form2) == NULL);
+    assert(sexpr_list_rest(form2) == NULL);
+
+    SExpr* form3 = b[3];
+    assert(form3->type == SEXPR_LIST);
+    SExpr* form3_elem = sexpr_list_first(form3);
+    assert(form3_elem != NULL);
+    assert(form3_elem->type == SEXPR_LIST);
+    assert(sexpr_list_first(form3_elem) == NULL);
+    assert(sexpr_list_rest(form3_elem) == NULL);
+    SExpr* form3_rest = sexpr_list_rest(form3);
+    assert(form3_rest == NULL);
     printf("done: adjacent lists2 are adjacent\n");
 }
 
