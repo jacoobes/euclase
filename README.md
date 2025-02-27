@@ -258,5 +258,4 @@ Only `while` loops are implemented. The result of the last iteration is returned
 
 ## bugs?
 - overflow on large numbers (fact 255) would seg fault
-- forms that are next to each other, example (1 2)(3 4) bug out
 - garbage collection bugs
