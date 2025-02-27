@@ -17,6 +17,9 @@ void ignore_spaces(const char *input, int *pos) {
 }
 
 void advance(int *pos) { ++*pos; }
+char peek(const char *input, int *pos) {
+    return input[(*pos) + 1];
+}
 
 char next(const char *input, int *pos) {
     advance(pos);
@@ -39,10 +42,18 @@ SExpr* sexpr_number_create(double num) {
 }
 
 SExpr *read_number(const char *input, const int sign, int *pos) {
-    int64_t result = 0;
+    double result = 0;
     for (char c = input[*pos]; isdigit(c); c = next(input, pos)) {
         result *= 10;
         result += c - '0';
+    }
+    if(input[*pos] == '.') {
+        advance(pos);
+        double factor = 0.1;
+        for (char c = input[*pos]; isdigit(c); c = next(input, pos)) {
+            result += (c - '0') * factor;
+            factor *= 0.1;
+        }
     }
     return sexpr_number_create(sign*result);
 }
@@ -118,8 +129,13 @@ SExpr *read_string(const char *input, int *pos) {
 
 SExpr *read_atom(const char *input, int *pos) {
     const char cur = skip_whitespace(input, pos);
+    const char next = peek(input, pos);
     if (isdigit(cur)) {
         return read_number(input, 1, pos);
+    }
+    if (cur == '-' && isdigit(next)) {
+        advance(pos);
+        return read_number(input, -1, pos);
     }
     if (is_identifier_char(cur)) {
         return read_symbol(input, pos);

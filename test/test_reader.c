@@ -33,6 +33,14 @@ void test_read_number() {
     assert(expr2->value.number == -456.0);
     free_sexpr(expr2);
 
+
+
+    int pos3 = 0;
+    SExpr* expr3 = read_number("456.56", -1, &pos3);
+    assert(expr3 != NULL);
+    assert(expr3->type == SEXPR_NUMBER);
+    assert(expr3->value.number == -456.56);
+    free_sexpr(expr3);
     printf("test_read_number passed!\n");
 }
 
@@ -77,6 +85,31 @@ void test_read_string() {
     free_sexpr(expr);
 
     printf("test_read_string passed!\n");
+}
+
+
+void test_read_atom() {
+    int pos = 0;
+    SExpr *expr = read_atom("-42", &pos);
+    assert(expr != NULL);
+    assert(expr->type == SEXPR_NUMBER);
+    assert(expr->value.number == -42);
+    free_sexpr(expr);
+
+    int pos2 = 0;
+    SExpr *expr2 = read_atom("abc", &pos2);
+    assert(expr2 != NULL);
+    assert(expr2->type == SEXPR_SYMBOL);
+    assert(strcmp(expr2->value.symbol, "abc") == 0);
+    free_sexpr(expr2);
+
+    int pos3 = 0;
+    SExpr *expr3 = read_atom("\"abcdefg\"", &pos3);
+    assert(expr3 != NULL);
+    assert(expr3->type == SEXPR_STRING);
+    assert(strcmp(expr3->value.string, "abcdefg") == 0);
+    free_sexpr(expr3);
+
 }
 
 void test_read_list() {
@@ -268,6 +301,7 @@ int main() {
     test_read_number();
     test_read_symbol();
     test_read_string();
+    test_read_atom();
     test_read_list();
     test_read_empty_list();
     test_sexpr_list_len();
