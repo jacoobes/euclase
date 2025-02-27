@@ -138,6 +138,13 @@ numbers are represented as doubles and currently are written as `[0-9]+`
 ```js
 12312321
 ```
+```js
+12312321.12312
+```
+
+```js
+-12312321.12312
+```
 
 ### strings
 strings are interned and are any characters surrounded by quotes `" "`. In addition there are escape characters:
