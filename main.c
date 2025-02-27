@@ -211,18 +211,8 @@ typedef struct {
 } Compiler;
 
 
-void compiler_append_unit(Compiler* compiler, const char* name, const int arity) {
-    darray_append(compiler->units, compileunit_create(name, arity));
-
-}
-
-static inline CompileUnit* compiler_peek_unit (const Compiler* compiler) {
-    const size_t size = darray_size(compiler->units);
-    if (size == 0) {
-        printf("Error: No units to peek!\n");
-        return NULL;
-    }
-    return darray_item(compiler->units, size-1);
+void compiler_append_unit(Compiler* compiler, CompileUnit* cu ) {
+    darray_append(compiler->units, cu);
 }
 
 
@@ -232,7 +222,7 @@ static inline CompileUnit* compiler_cur_compile_unit (const Compiler* compiler) 
 
 void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
     darray_init(compiler->units);
-    compiler_append_unit(compiler, "__main__", 0);
+    compiler_append_unit(compiler, compileunit_create("__main__", 0));
     compiler->current_unit= darray_item(compiler->units, 0);
 
     compiler->globals=globals;
@@ -383,7 +373,6 @@ int resolve_upvalue(Compiler* compiler, const char* symbol) {
     // going up the compile-unit stack 
     // resolving where the upvalue is.
     // we also know that we checked local symbols already.
-    size_t s = compiler->units.size-1;
     CompileUnit** cu;
     darray_foreach_reverse(cu, compiler->units) {
         int loc = localchart_resolve_symbol((*cu)->locals_chart, symbol);
@@ -475,8 +464,10 @@ void emit(Compiler* compiler, SExpr *sexpr) {
 
                     // first class functions are just variables in disguise, that's why clojure's
                     // defn is just syntax over def and f
-                    compiler_append_unit(compiler, fn_name->value.symbol, sexpr_list_len(args));
-                    compiler->current_unit = darray_pop(compiler->units);
+                    CompileUnit* prev = compiler->current_unit;
+                    CompileUnit* cu = compileunit_create(fn_name->value.symbol, sexpr_list_len(args) );
+                    compiler_append_unit(compiler, cu);
+                    compiler->current_unit = cu;
                     
 
                     //enter the scope of the currently compiling function
@@ -496,18 +487,19 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         //printf(result != -1 ? "inserted\n" : "removed\n");
                     };
 
+                    // if body of function has some forms, 
                     if (sexpr_list_len(body)) {
                         SExpr* cur_exp;
                         sexpr_list_foreach(cur_exp, body) {
                             emit(compiler, sexpr_list_first(cur_exp));
                         };
+                    // emit a 0, or falsy in this lang
                     } else {
                         compiler_load_const(compiler, lobj_num(0));
                     }
                     compiler_write_byte(compiler, I_RETURN);
 
 
-                    const CompileUnit* cu = compiler_cur_compile_unit(compiler);
                     const lobj new_closure = compile_unit_get_closure(cu);
 
 #ifdef DEBUG
@@ -517,7 +509,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
 
 
                     // Return to previous pointer as current unit. 
-                    compiler->current_unit = compiler_peek_unit(compiler);
+                    compiler->current_unit = prev;
                     // adding the closure unit into the constant pool
                     compiler_load_const(compiler, new_closure);
 
@@ -716,8 +708,10 @@ int main(int argc, char **argv) {
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
             const char* fib ="(fn (fact (x))"
-                                "   (if (<= x 2) x (* x (fact (- x 1)))))"
-            " (fact 10)";
+                              " (if (<= x 2) x (* x (fact (- x 1)))))"
+                             " (fn (add (x y))"
+                             "  (+ x y))"
+                             " (add (fact 10) (fact 5))";
 
             const char* global_vars = "(var a 5)\n"
                                             "(+ a (+ 120 1))\n";

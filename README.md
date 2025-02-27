@@ -118,8 +118,6 @@ The format below for opcodes is \<NAME\> \<byte\> \<OPS\>
    - Sets an upvalue in a closure. 
 
 
-
-
 ## Language Specification 
 
 

@@ -54,7 +54,7 @@ SExpr *read_symbol(const char *input, int *pos) {
     char c = input[*pos];
     while (is_identifier_char(c)) {
         symbol[i++] = c;
-        c = input[++(*pos)];
+        c = next(input,pos);
     }
     SExpr *expr = ALLOCATE(SExpr, 1);
     if (strcmp(symbol, "true") == 0) {
@@ -117,7 +117,7 @@ SExpr *read_string(const char *input, int *pos) {
 }
 
 SExpr *read_atom(const char *input, int *pos) {
-    const char cur = input[*pos];
+    const char cur = skip_whitespace(input, pos);
     if (isdigit(cur)) {
         return read_number(input, 1, pos);
     }
@@ -143,10 +143,11 @@ SExpr* read_list(const char* input, int* pos) {
     advance(pos); // skip the first '('
     SExpr* head = NULL;
     SExpr* cur = NULL;
-    while(*pos < strlen(input) && input[*pos] != ')') {
-        const char next = skip_whitespace(input, pos);
+    int len = strlen(input);
+    char next;
+    while(*pos < len && (next = skip_whitespace(input, pos))) {
+        //handle empty list
         if (next == ')') {
-            //handle empty list
             break;
         }
         SExpr* el;
@@ -171,8 +172,11 @@ SExpr* read_list(const char* input, int* pos) {
             cur = new_cons;
         }
     }
+
+    printf("next '%c'\n", next);
     //skip any trailing whitespace in list
-    skip_whitespace(input, pos);
+    char ch = skip_whitespace(input, pos);
+    printf("cur '%c'\n", next);
     // skip the ')'
     advance(pos);
     if(!cur) {
@@ -187,7 +191,7 @@ SExpr **read_all(const char *input, size_t *count) {
     *count = 0;
     int i = 0;
     while (i < strlen(input)) {
-        char cur = input[i];
+        char cur = skip_whitespace(input, &i);
         //printf("%c %d\n", cur, i);
         if (cur == ';') {
             while (input[i] != '\0' && input[i] != '\n') i++;
@@ -196,8 +200,10 @@ SExpr **read_all(const char *input, size_t *count) {
         SExpr *expr;
         if (cur == '(') {
             expr = read_list(input, &i);
+            printf("when reading list, '%c'\n", input[i]);
         } else {
             expr = read_atom(input, &i);
+            printf("when reading atom, '%c'\n", input[i]);
         }
         if (*count == capacity) {
             capacity = capacity ? capacity * 2 : 1;
@@ -208,7 +214,6 @@ SExpr **read_all(const char *input, size_t *count) {
             exit(1);
         }
         exprs[(*count)++] = expr;
-        i++;
     }
     return exprs;
 }

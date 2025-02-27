@@ -27,11 +27,11 @@ void test_read_number() {
 
 
     int pos2 = 0;
-    expr = read_number("456", -1, &pos);
-    assert(expr != NULL);
-    assert(expr->type == SEXPR_NUMBER);
-    assert(expr->value.number == -456.0);
-    free_sexpr(expr);
+    SExpr* expr2 = read_number("456", -1, &pos2);
+    assert(expr2 != NULL);
+    assert(expr2->type == SEXPR_NUMBER);
+    assert(expr2->value.number == -456.0);
+    free_sexpr(expr2);
 
     printf("test_read_number passed!\n");
 }
@@ -162,8 +162,6 @@ void test_read_nested_list() {
 
 }
 
-
-
 void test_sexpr_list_len() {
     const char *input = "()";
     int pos = 0;
@@ -190,6 +188,9 @@ void test_sexpr_list_read_all() {
     assert(a != NULL);
     assert(count == 2);
 }
+
+
+
 void test_sexpr_list_spacing() {
     const char *input = "( 1   2    )";
     int pos = 0;
@@ -211,6 +212,16 @@ void test_sexpr_list_read_all2() {
     assert(b != NULL);
     printf("%zu\n", count2);
     assert(count2 == 2);
+    printf("done: lists2\n");
+}
+
+void test_sexpr_list_adj() {
+    const char* input3 = "(f 10 )(fne 12 )()(())";
+    printf("test_sexpr_list_adj\n");
+    size_t count2;
+    SExpr** b = read_all(input3, &count2);
+    assert(b != NULL);
+    assert(count2 == 4);
     printf("done: adjacent lists2 are adjacent\n");
 }
 
@@ -225,7 +236,7 @@ int main() {
     test_sexpr_list_len();
     test_sexpr_list_spacing();
     test_read_nested_list();
-
+    test_sexpr_list_adj();
     test_sexpr_list_read_all();
     test_sexpr_list_read_all2();
 
