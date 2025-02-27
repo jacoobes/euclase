@@ -359,20 +359,6 @@ void compiler_write_ushort(const Compiler* compiler, unsigned short jump_loc) {
     darray_push(cur_unit->bytes, jump_loc & 0xff);
 }
 
-
-int resolve_upvalue(Compiler* compiler, const char* symbol) { 
-    // going up the compile-unit stack 
-    // resolving where the upvalue is.
-    // we also know that we checked local symbols already.
-    size_t s = compiler->units.size-1;
-    while (s >= 0) {
-        CompileUnit* cur = darray_item(compiler->units, s);
-        localchart_resolve_symbol(cur->locals_chart, symbol);
-        
-    }
-    return 0;
-}
-
 int add_upvalue(Compiler* compiler, uint8_t index, bool is_local  ) {
     CompileUnit* cu = compiler_cur_compile_unit(compiler);
     
@@ -392,6 +378,21 @@ int add_upvalue(Compiler* compiler, uint8_t index, bool is_local  ) {
     cu->upvalues[cu->upvalue_count].is_local = false;
     return cu->upvalue_count++;
 }
+
+int resolve_upvalue(Compiler* compiler, const char* symbol) { 
+    // going up the compile-unit stack 
+    // resolving where the upvalue is.
+    // we also know that we checked local symbols already.
+    size_t s = compiler->units.size-1;
+    CompileUnit** cu;
+    darray_foreach_reverse(cu, compiler->units) {
+        int loc = localchart_resolve_symbol((*cu)->locals_chart, symbol);
+    }
+
+    return -1;
+}
+
+
 
 
 // emit essentially transitions parsing lifetime to compile lifetime
@@ -416,10 +417,18 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                 compiler_write_byte(compiler,  local_index);
             } else {
                 int upvalue_location = resolve_upvalue(compiler, symbol);
-                // str dupe symbol
-                const int new_size = compiler_add_const(compiler, lobj_str(symbol));
-                compiler_write_byte(compiler,I_GET_GLOBAL);
-                compiler_write_byte(compiler, new_size-1);
+
+                // upvalue not found
+                if (upvalue_location == -1) {
+                    // str dupe symbol
+                    const int new_size = compiler_add_const(compiler, lobj_str(symbol));
+                    compiler_write_byte(compiler,I_GET_GLOBAL);
+                    compiler_write_byte(compiler, new_size-1);                    
+                } else {
+                    // resolve upvalue
+
+                }
+
             }
         }
         break;
@@ -707,7 +716,7 @@ int main(int argc, char **argv) {
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
             const char* fib ="(fn (fact (x))"
-                                "   (if (<= x 2) x  (* x (fact (- x 1)))))"
+                                "   (if (<= x 2) x (* x (fact (- x 1)))))"
             " (fact 10)";
 
             const char* global_vars = "(var a 5)\n"
@@ -719,9 +728,9 @@ int main(int argc, char **argv) {
                 return 1;  // Error already printed in read_file
             }
 
-            printf("program:\n '%s'\n", looper);
+            printf("program:\n '%s'\n", fib);
             size_t count;
-            SExpr **exprs = read_all(looper, &count); // or read appropriate function
+            SExpr **exprs = read_all(fib, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
 
             HashTable globals, strings;

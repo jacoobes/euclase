@@ -24,12 +24,14 @@ void test_read_number() {
     assert(expr->type == SEXPR_NUMBER);
     assert(expr->value.number == 123);
     free_sexpr(expr);
-    //pos = 0;
-    // expr = read_number("-456", -1, &pos);
-    // assert(expr != NULL);
-    // assert(expr->type == SEXPR_NUMBER);
-    // assert(expr->value.number == -456);
-    // free_sexpr(expr);
+
+
+    int pos2 = 0;
+    expr = read_number("456", -1, &pos);
+    assert(expr != NULL);
+    assert(expr->type == SEXPR_NUMBER);
+    assert(expr->value.number == -456.0);
+    free_sexpr(expr);
 
     printf("test_read_number passed!\n");
 }
