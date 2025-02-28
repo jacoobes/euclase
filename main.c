@@ -709,9 +709,9 @@ int main(int argc, char **argv) {
 //          char *buffer = read_file(filename, &size_read);
             const char* fib ="(fn (fact (x))"
                               " (if (<= x 2) x (* x (fact (- x 1)))))"
-                             " (fn (add (x y))"
+                             "(fn (add (x y))"
                              "  (+ x y))"
-                             " (add (fact 10) (fact 5))";
+                             "(add (fact 10) (fact 5))";
 
             const char* global_vars = "(var a 5)\n"
                                             "(+ a (+ 120 1))\n";

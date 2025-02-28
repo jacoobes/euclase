@@ -248,7 +248,53 @@ The virtual machine comes with an assembler which provides low level access to t
 the source code is [here](./asm.c). 
 
 
-as of 2/28/2025 the opcodes it can interpret are not up to parity with the language itself.
+as of **2/28/2025** the opcodes it can interpret are not up to parity with the language itself.
+
+```
+:main 0                                   
+   LOAD 1                                 
+   JMP_FALSY 3                            
+   LOAD 4                                 
+   RETURN                                 
+   LOAD 3                                 
+   RETURN                                
+```
+
+An example of an if else which `returns 4 if true else 3`
+
+
+#### Labels
+Labels are the moral equivalent of a function. In fact, a function will be created in the assembler.
+
+```
+:(symbol) <arity>
+```
+**symbol** is the name of the function. **arity** is the number of arguments for a function.
+
+
+Current instructions that the assembler can handle:
+
+```
+"HALT"
+"LOAD"
+"ADD"
+"SUB"
+"MUL"
+"DIV"
+"MOD"
+"NEG"
+"POP"
+"RETURN"
+"CALL"
+"GET_LOCAL"
+"SET_LOCAL"
+"JMP"
+"JMP_FALSY"
+"LOOP"
+```
+
+### Other samples:
+Other samples can be found in the [samples directory]("./sample")
 
 
 ## todo
@@ -256,9 +302,9 @@ as of 2/28/2025 the opcodes it can interpret are not up to parity with the langu
 - gc
 - benchmarks
 - OR bytecode emission
-- docuemntation
 - arrays
 
 ## bugs?
 - overflow on large numbers (fact 255) would seg fault
+    - check for overflow
 - garbage collection bugs
