@@ -216,9 +216,6 @@ void compiler_append_unit(Compiler* compiler, CompileUnit* cu ) {
 }
 
 
-static inline CompileUnit* compiler_cur_compile_unit (const Compiler* compiler) {
-    return compiler->current_unit;
-}
 
 void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
     darray_init(compiler->units);
@@ -239,14 +236,14 @@ void compiler_destroy(Compiler *compiler) {
 }
 
 static inline int compiler_write_byte(const Compiler *compiler, const uint8_t byte) {
-    CompileUnit* cur_unit = compiler_cur_compile_unit(compiler);
+    CompileUnit* cur_unit = compiler->current_unit;
     darray_push(cur_unit->bytes, byte);
     return darray_size(cur_unit->bytes)-1;
 }
 
 // adds value to current units' compiler pool. Returns the size of array after pushing
 static inline int compiler_add_const(const Compiler *compiler, const lobj value) {
-    CompileUnit* cu = compiler_cur_compile_unit(compiler);
+    CompileUnit* cu = compiler->current_unit;
     if (IS_STR(value)) {
         vm_string* str = AS_STR(value);
         const vm_string* dupe = table_find_string(compiler->strings, &str->contents, str->hash);
@@ -269,12 +266,12 @@ static inline int compiler_add_const(const Compiler *compiler, const lobj value)
 static inline void compiler_load_const(const Compiler* compiler, lobj constant) {
     compiler_write_byte(compiler, I_LOAD);
 #ifdef DEBUG
-    printf("I_LOAD "); lobj_print(&constant); printf(" to %s\n", compiler_cur_compile_unit(compiler)->name);
+    printf("I_LOAD "); lobj_print(&constant); printf(" to %s\n", compiler->current_unit->name);
 #endif
 
 
     compiler_add_const(compiler, constant);
-    compiler_write_byte(compiler, darray_size(compiler_cur_compile_unit(compiler)->constants) - 1);
+    compiler_write_byte(compiler, darray_size(compiler->current_unit->constants) - 1);
 }
 
 
@@ -336,7 +333,7 @@ int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruct
 }
 
 void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc) {
-    const CompileUnit* cur_unit = compiler_cur_compile_unit(compiler);
+    const CompileUnit* cur_unit = compiler->current_unit;
     cur_unit->bytes.item[ushort_begin] = (jump_loc >> 8) & 0xff;
     cur_unit->bytes.item[ushort_begin+1] = jump_loc & 0xff;
 }
@@ -344,13 +341,13 @@ void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t j
 
 
 void compiler_write_ushort(const Compiler* compiler, unsigned short jump_loc) {
-    CompileUnit* cur_unit = compiler_cur_compile_unit(compiler);
+    CompileUnit* cur_unit = compiler->current_unit;
     darray_push(cur_unit->bytes, (jump_loc >> 8) & 0xff );
     darray_push(cur_unit->bytes, jump_loc & 0xff);
 }
 
 int add_upvalue(Compiler* compiler, uint8_t index, bool is_local  ) {
-    CompileUnit* cu = compiler_cur_compile_unit(compiler);
+    CompileUnit* cu = compiler->current_unit;
     
     // find duplicates for upvalue, since a "closure may reference the same variable in a surrounding function multiple times" 
     for (int i = 0; i < cu->upvalue_count; i++) {
@@ -373,11 +370,12 @@ int resolve_upvalue(Compiler* compiler, const char* symbol) {
     // going up the compile-unit stack 
     // resolving where the upvalue is.
     // we also know that we checked local symbols already.
-    CompileUnit** cu;
-    darray_foreach_reverse(cu, compiler->units) {
-        int loc = localchart_resolve_symbol((*cu)->locals_chart, symbol);
+    if(compiler->units.size == 1) {
+        return -1;
     }
 
+    CompileUnit** cu; 
+    
     return -1;
 }
 
@@ -406,7 +404,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                 compiler_write_byte(compiler,  local_index);
             } else {
                 int upvalue_location = resolve_upvalue(compiler, symbol);
-
                 // upvalue not found
                 if (upvalue_location == -1) {
                     // str dupe symbol
@@ -414,6 +411,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_write_byte(compiler,I_GET_GLOBAL);
                     compiler_write_byte(compiler, new_size-1);                    
                 } else {
+                    
                     // resolve upvalue
 
                 }
@@ -582,8 +580,10 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_write_byte(compiler, I_SET_GLOBAL);
                     compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
+
                     #define BYTELEN \
-                        (darray_size(compiler_cur_compile_unit(compiler)->bytes))
+                        (darray_size(compiler->current_unit->bytes))
+
                     //condition
                     emit(compiler, sexpr_list_first(rest));
                     // emit a jmp if falsy
@@ -612,7 +612,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                 } else if (strcmp(symbol, "and") == 0) {
                     // evaluate first. if false, evaluate second one
                     #define BYTELEN \
-                        (darray_size(compiler_cur_compile_unit(compiler)->bytes))
+                        (darray_size(compiler->current_unit->bytes))
 
                     // emit first
                     emit(compiler, sexpr_list_first(rest));
@@ -632,7 +632,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                 } else if (strcmp(symbol, "while") == 0) {
 
                     #define BYTELEN \
-                        (darray_size(compiler_cur_compile_unit(compiler)->bytes))
+                        (darray_size(compiler->current_unit->bytes))
 
                     //condition
                     emit(compiler, sexpr_list_first(rest));
@@ -709,8 +709,10 @@ int main(int argc, char **argv) {
 //          char *buffer = read_file(filename, &size_read);
             const char* fib ="(fn (fact (x))"
                               " (if (<= x 2) x (* x (fact (- x 1)))))"
+                             "               "
                              "(fn (add (x y))"
                              "  (+ x y))"
+                             "          "
                              "(add (fact 10) (fact 5))";
 
             const char* global_vars = "(var a 5)\n"
