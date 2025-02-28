@@ -244,8 +244,11 @@ Only `while` loops are implemented. The result of the last iteration is returned
 ```
 
 ### Assembler
+The virtual machine comes with an assembler which provides low level access to the virtual machine.
+the source code is [here](./asm.c). 
 
-... todo
+
+as of 2/28/2025 the opcodes it can interpret are not up to parity with the language itself.
 
 
 ## todo
