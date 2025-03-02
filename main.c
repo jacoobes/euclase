@@ -155,6 +155,7 @@ typedef struct CompileUnit {
     //owned: need to free this
     char* name;
     int arity;
+    struct CompileUnit* enclosing;
 } CompileUnit;
 
 // name is duplicated, need to manage memory
@@ -175,6 +176,7 @@ CompileUnit* compileunit_create(const char* name, const int arity) {
     cu->locals_chart = lc;
 
     cu->upvalue_count = 0;
+    cu->enclosing=NULL;
     return cu;
 }
 void compileunit_free(CompileUnit* cu) {
@@ -202,7 +204,7 @@ lobj compile_unit_get_closure(const CompileUnit* cu) {
 }
 
 typedef struct {
-    darray(CompileUnit*) units;
+    // darray(CompileUnit*) units;
     // current_unit belongs to units, so when we clean up, we set to NULL, and then
     // just free units
     CompileUnit* current_unit;
@@ -211,16 +213,11 @@ typedef struct {
 } Compiler;
 
 
-void compiler_append_unit(Compiler* compiler, CompileUnit* cu ) {
-    darray_append(compiler->units, cu);
-}
-
 
 
 void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
-    darray_init(compiler->units);
-    compiler_append_unit(compiler, compileunit_create("__main__", 0));
-    compiler->current_unit= darray_item(compiler->units, 0);
+    // darray_init(compiler->units);
+    compiler->current_unit= compileunit_create("__main__", 0);
 
     compiler->globals=globals;
     compiler->strings=strings;
@@ -228,10 +225,9 @@ void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings)
 }
 
 void compiler_destroy(Compiler *compiler) {
-    compiler->current_unit = NULL;
-    CompileUnit** cu;
-    darray_foreach(cu, compiler->units) {
-        compileunit_free(*cu);
+    while (compiler->current_unit->enclosing != NULL) {
+        compileunit_free(compiler->current_unit);
+        compiler->current_unit= compiler->current_unit->enclosing;
     }
 }
 
@@ -366,16 +362,11 @@ int add_upvalue(Compiler* compiler, uint8_t index, bool is_local  ) {
     return cu->upvalue_count++;
 }
 
-int resolve_upvalue(Compiler* compiler, const char* symbol) { 
+int resolve_upvalue(CompileUnit* cu, const char* symbol) {
     // going up the compile-unit stack 
     // resolving where the upvalue is.
     // we also know that we checked local symbols already.
-    if(compiler->units.size == 1) {
-        return -1;
-    }
 
-    CompileUnit** cu; 
-    
     return -1;
 }
 
@@ -403,7 +394,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                 compiler_write_byte(compiler,  I_GET_LOCAL);
                 compiler_write_byte(compiler,  local_index);
             } else {
-                int upvalue_location = resolve_upvalue(compiler, symbol);
+                const int upvalue_location = resolve_upvalue(compiler->current_unit, symbol);
                 // upvalue not found
                 if (upvalue_location == -1) {
                     // str dupe symbol
@@ -427,7 +418,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                 compiler_load_const(compiler, into_lobj(LVAL_OBJ, str));
                 table_set(compiler->strings, str, lobj_num(1));
             } else {
-                compiler_load_const(compiler, into_lobj(LVAL_OBJ, dupe));
+                compiler_load_const(compiler, into_lobj(LVAL_OBJ, (void*)dupe));
                 vm_string_free(str);
             }
         }
@@ -464,7 +455,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // defn is just syntax over def and f
                     CompileUnit* prev = compiler->current_unit;
                     CompileUnit* cu = compileunit_create(fn_name->value.symbol, sexpr_list_len(args) );
-                    compiler_append_unit(compiler, cu);
                     compiler->current_unit = cu;
                     
 
@@ -720,9 +710,6 @@ int main(int argc, char **argv) {
 
             const char* looper = "(let (a 10) "
                                     "(while a (@a (- a 1))))";
-            if (!fib) {
-                return 1;  // Error already printed in read_file
-            }
 
             printf("program:\n '%s'\n", fib);
             size_t count;
@@ -744,7 +731,7 @@ int main(int argc, char **argv) {
                 free_sexpr(exprs[i]);
             }
 
-            CompileUnit* main_fn= darray_item(compiler.units, 0);
+            CompileUnit* main_fn= compiler.current_unit;
             if(main_fn == NULL) {
                 printf("main function entry point not found");
                 exit(1);
