@@ -196,11 +196,13 @@ lobj compile_unit_get_closure(const CompileUnit* cu) {
         exit(1);
     };
 
-    //this is realllllly ugly lol
+    //this is reallying ugly lol
     return into_lobj(LVAL_OBJ, vm_closure_create(
                                         vm_function_create(cu->bytes.item, darray_size(cu->bytes),
                                                            cu->constants.item, darray_size(cu->constants),
-                                                           cu->arity, lobj_str(cu->name))));
+                                                           cu->arity, lobj_str(cu->name),
+                                                           cu->upvalue_count
+                                                           )));
 }
 
 typedef struct {
@@ -335,16 +337,13 @@ void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t j
 }
 
 
-
-void compiler_write_ushort(const Compiler* compiler, unsigned short jump_loc) {
-    CompileUnit* cur_unit = compiler->current_unit;
+void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_loc) {
     darray_push(cur_unit->bytes, (jump_loc >> 8) & 0xff );
     darray_push(cur_unit->bytes, jump_loc & 0xff);
 }
 
-int add_upvalue(Compiler* compiler, uint8_t index, bool is_local  ) {
-    CompileUnit* cu = compiler->current_unit;
-    
+int add_upvalue(CompileUnit* cu, uint8_t index, bool is_local  ) {
+
     // find duplicates for upvalue, since a "closure may reference the same variable in a surrounding function multiple times" 
     for (int i = 0; i < cu->upvalue_count; i++) {
         Upvalue* upv = &cu->upvalues[i]; 
@@ -366,7 +365,13 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
     // going up the compile-unit stack 
     // resolving where the upvalue is.
     // we also know that we checked local symbols already.
-
+    if (cu->enclosing == NULL) {
+        return -1;
+    }
+    const int result = localchart_resolve_symbol(cu->locals_chart, symbol);
+    if (result != -1) {
+        return add_upvalue(cu->enclosing, (uint8_t)result, true);
+    }
     return -1;
 }
 
@@ -440,7 +445,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                 if(strcmp(symbol, "fn") == 0) {
                     SExpr* fn_def = sexpr_list_first(rest); // '(name (a b))
                     const SExpr* fn_name = sexpr_list_first(fn_def); // "name"
-                    SExpr* args = sexpr_list_first(sexpr_list_rest(fn_def)); // '(a b)
+                    SExpr* args = sexpr_list_first(sexpr_list_rest(fn_def)); // (a b)
                     SExpr* body = sexpr_list_rest(rest); // '(+ a b)
 
                     if(fn_name->type != SEXPR_SYMBOL) {
@@ -546,7 +551,9 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         emit(compiler, sexpr_list_first(b_form));
                     }
                     const size_t removed = localchart_leave_scope(compiler->current_unit->locals_chart);
+#ifdef DEBUG
                     printf("removed %zu\n", removed);
+#endif
                     for(size_t i = 0; i < removed; i++ ) {
                         compiler_write_byte(compiler, I_POP);
                     }
@@ -571,7 +578,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
 
-                    #define BYTELEN \
+                    #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))
 
                     //condition
@@ -579,7 +586,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // emit a jmp if falsy
                     const int ushort_start = compiler_jump_emit(compiler, I_JMP_FALSY);
                     // we get the length of bytes after jmp emitted,
-                    int cur_size = BYTELEN;
+                    int cur_size = BYTE_LEN;
                     rest = sexpr_list_rest(rest);
 
                     //true val
@@ -587,55 +594,55 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     const int ushort_true = compiler_jump_emit(compiler, I_JMP);
                     // we can patch the jmp needed after processing truth branch by getting difference
                     // (length after processing truthy branch) - (length before)
-                    const int jump_loc = BYTELEN - cur_size;
+                    const int jump_loc = BYTE_LEN - cur_size;
 
 
-                    cur_size = BYTELEN;
+                    cur_size = BYTE_LEN;
                     //false val
                     emit(compiler, sexpr_list_first(sexpr_list_rest(rest)));
-                    const size_t cur_location = BYTELEN - cur_size;
+                    const size_t cur_location = BYTE_LEN - cur_size;
 
                     compiler_jump_patch(compiler, ushort_start, jump_loc);
                     compiler_jump_patch(compiler, ushort_true, cur_location);
 
-                    #undef BYTELEN
+                    #undef BYTE_LEN
                 } else if (strcmp(symbol, "and") == 0) {
                     // evaluate first. if false, evaluate second one
-                    #define BYTELEN \
+                    #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))
 
                     // emit first
                     emit(compiler, sexpr_list_first(rest));
 
                     const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY);
-                    const int cur_size = BYTELEN;
+                    const int cur_size = BYTE_LEN;
 
                     rest = sexpr_list_rest(rest);
                     // emit second
                     emit(compiler, sexpr_list_first(rest));
 
-                    const size_t cur_location = BYTELEN - cur_size;
+                    const size_t cur_location = BYTE_LEN - cur_size;
 
                     compiler_jump_patch(compiler, ushort_begin, cur_location);
 
-                    #undef BYTELEN
+                    #undef BYTE_LEN
                 } else if (strcmp(symbol, "while") == 0) {
 
-                    #define BYTELEN \
+                    #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))
 
                     //condition
                     emit(compiler, sexpr_list_first(rest));
-                    const int loop_back_loc = BYTELEN;
+                    const int loop_back_loc = BYTE_LEN;
                     const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY); // returns where the ushort begins +2
 
                     compiler_write_byte(compiler, I_POP);
                     rest = sexpr_list_rest(rest);
                     emit(compiler, sexpr_list_first(rest)); 
                     compiler_write_byte(compiler, I_LOOP);
-                    compiler_write_ushort(compiler, BYTELEN - loop_back_loc + 2); 
-                    compiler_jump_patch(compiler, ushort_begin, BYTELEN-ushort_begin-2);
-                    #undef BYTELEN
+                    compileunit_write_ushort(compiler->current_unit, BYTE_LEN - loop_back_loc + 2);
+                    compiler_jump_patch(compiler, ushort_begin, BYTE_LEN-ushort_begin-2);
+                    #undef BYTE_LEN
 
                 } else if(symbol[0] == '@')  {
                     const char* ident = symbol+1;

@@ -43,6 +43,7 @@ typedef struct {
     int values_ct;
 
     lobj name;
+    int upvalues_count;
 } vm_function;
 
 //immutable wrapper for solid_str which extends a vm_obj
@@ -97,7 +98,8 @@ vm_function* vm_function_create(uint8_t* initial_code,
                                 lobj* values,
                                 int values_count,
                                 uint8_t arity,
-                                lobj name);
+                                lobj name,
+                                int upvalues_count);
 
 vm_closure* vm_closure_create(vm_function* fn);
 vm_string* vm_string_create(const char* contents);

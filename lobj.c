@@ -62,7 +62,8 @@ vm_function* vm_function_create(
     lobj* values,
     const int values_count,
     const uint8_t arity,
-    lobj name
+    const lobj name,
+    const int upvalues_count
 ) {
    vm_function* fn = malloc(sizeof (vm_function));
                    fn->obj.type=OBJ_FUNC;
@@ -72,6 +73,7 @@ vm_function* vm_function_create(
                    fn->values_ct=values_count;
                    fn->arity=arity;
                    fn->name=name;
+                   fn->upvalues_count = upvalues_count;
    return fn;
 }
 
