@@ -38,8 +38,8 @@ enum Instruction {
     I_RETURN      ,
     I_LOOP        ,
     I_CLOSURE     ,
-    I_GET_UPVAL   ,
-    I_SET_UPVAL   ,
+    I_GET_UPVALUE ,
+    I_SET_UPVALUE ,
 };
 
 

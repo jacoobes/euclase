@@ -67,7 +67,10 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     }
 }
 
-
+static vm_upvalue* captureUpvalue(lobj* local) {
+    vm_upvalue* createdUpvalue = vm_upvalues_create(local);
+    return createdUpvalue;
+}
 
 /*
  * Returns a heap allocated string of stack trace.
@@ -302,6 +305,20 @@ int vm_exec(VM *vm, int flags) {
                 vm_closure* closure = vm_closure_create(fn);
                 //create lobj 
                 vm_push(vm, into_lobj(LVAL_OBJ, closure));
+                // I_CLOSURE is a variable length instruction, depending on
+                // upvalue count.
+
+                for (int i = 0; i < closure->upvalues_ct; i++) {
+                    uint8_t isLocal = READ_BYTE();
+                    uint8_t index = READ_BYTE();
+                    if (isLocal) {
+                         closure->upvalues[i] =
+                             captureUpvalue(cur_frame->slots + index);
+                    } else {
+                        // take upvalues from currently 'executing' function
+                        closure->upvalues[i] = cur_frame->closure->upvalues[index];
+                    }
+                }
             } break;
             case I_GET_GLOBAL: {
                 // the name of our string is reference in bytecode's constants by index
@@ -334,6 +351,14 @@ int vm_exec(VM *vm, int flags) {
                 // set value
                 table_set(vm->globals, name, value);
                 vm_pop(vm);
+            } break;
+            case I_GET_UPVALUE: {
+                uint8_t index = READ_BYTE();
+                vm_push(vm, *cur_frame->closure->upvalues[index]->location);
+            } break;
+            case I_SET_UPVALUE: {
+                uint8_t index = READ_BYTE();
+                *cur_frame->closure->upvalues[index]->location = vm_peek(vm, 0);
             } break;
 
             default: {

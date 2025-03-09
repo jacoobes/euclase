@@ -16,6 +16,12 @@ hash(const unsigned char *str)
 
     return hash;
 }
+
+vm_upvalue* vm_upvalues_create(lobj* ref) {
+    vm_upvalue *up = ALLOCATE(vm_upvalue, 1);
+    up->location = ref;
+    return up;
+}
 vm_string* vm_string_create(const char* contents) {
     vm_string* s = malloc(sizeof(vm_string));
     s->hash= hash(contents);
@@ -31,10 +37,15 @@ void vm_string_free(vm_string* s) {
 vm_closure* vm_closure_create(vm_function* fn) {
     vm_closure* closure = ALLOCATE(vm_closure, 1);
 
+    vm_upvalue** upvalues = ALLOCATE(vm_upvalue*, fn->upvalues_count);
     // current tracking size
-    closure->upvalues_ct=0;
     // zero out closure->upvalues
-    memset(closure->upvalues, 0, sizeof(closure->upvalues));
+    for (int i = 0; i < fn->upvalues_count; i++) {
+        upvalues[i] = NULL;
+    }
+
+    closure->upvalues = upvalues;
+    closure->upvalues_ct=fn->upvalues_count;
 
     // union tag
     closure->obj.type = OBJ_CLOSURE;
@@ -100,9 +111,15 @@ void lobj_free(lobj* o) {
             } break;
             case OBJ_CLOSURE: {
                 // todo: do we need to free the function here?
-                vm_function* fn=(vm_function*)o->v.obj;
+                const vm_closure* closure = (vm_closure*)o->v.obj;
+                vm_function* fn= closure->fn;
+                // we don't free the underlying upvalues, that's up to the garbage collector in the future to do that
+                free(closure->upvalues);
                 free(fn->name.v.obj);
                 free(fn);
+            } break;
+            case OBJ_UPVALUE: {
+                free(o->v.obj);
             } break;
             case OBJ_USR: {
             } break;
@@ -157,6 +174,9 @@ void lobj_print(lobj* o) {
             case OBJ_STR: {
                 printf("'%s'", SOLID_STR_TO_C(AS_STR(*o)->contents));
             } break;
+            case OBJ_UPVALUE: {
+                printf("upvalue");
+            }
             default: { 
                 printf("obj, yo no se"); 
             } break;

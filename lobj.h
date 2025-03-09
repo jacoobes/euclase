@@ -9,7 +9,7 @@
 
 typedef enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_OBJ } LVAL;
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
-typedef enum { OBJ_CLOSURE, OBJ_STR, OBJ_FUNC, OBJ_USR } LOBJ_TYPE;
+typedef enum { OBJ_CLOSURE, OBJ_STR, OBJ_FUNC, OBJ_UPVALUE, OBJ_USR } LOBJ_TYPE;
 
 // the base object class
 typedef struct {
@@ -55,12 +55,15 @@ typedef struct {
 
 typedef struct {
     vm_object obj;
-    uint8_t upvalues[MAX_UPVALUE_COUNT]; //maximum upvalue count
+    lobj* location;
+} vm_upvalue;
+
+typedef struct {
+    vm_object obj;
+    vm_upvalue** upvalues; //maximum upvalue count
     uint8_t upvalues_ct;
     vm_function* fn;
 } vm_closure;
-
-
 
 #define IS_NUM(obj) ((obj).type == LVAL_NUM)
 #define IS_OBJ(obj) ((obj).type == LVAL_OBJ)
@@ -93,6 +96,8 @@ static inline lobj lobj_num(double x) {
    return (lobj){.type=LVAL_NUM, .v.num = x };
 }
 
+
+
 vm_function* vm_function_create(uint8_t* initial_code,
                                 uint8_t code_ct,
                                 lobj* values,
@@ -104,6 +109,8 @@ vm_function* vm_function_create(uint8_t* initial_code,
 vm_closure* vm_closure_create(vm_function* fn);
 vm_string* vm_string_create(const char* contents);
 void vm_string_free(vm_string* s);
+vm_upvalue* vm_upvalues_create(lobj* location);
+
 lobj lobj_str(const char *);
 
 lobj lobj_num(double x);

@@ -24,7 +24,7 @@ int main() {
     // create function called add
     vm_function* add = vm_function_create(add_code, sizeof(add_code),
                                           add_fn_values, sizeof(add_fn_values) / sizeof(lobj),
-                                          ADD_ARITY, lobj_str("add"));
+                                          ADD_ARITY, lobj_str("add"), 0);
     lobj add_closure = into_lobj(LVAL_OBJ, vm_closure_create(add));
     // the main function should have 
     lobj main_fn_values[]={add_closure, lobj_num(4), lobj_num(5)};
@@ -35,7 +35,7 @@ int main() {
 
     vm_function* main = vm_function_create(main_code, sizeof(main_code),
                                            main_fn_values, sizeof(main_fn_values) / sizeof(lobj),
-                                           main_arity, lobj_str("__main__"));
+                                           main_arity, lobj_str("__main__"), 0);
     lobj main_closure = into_lobj(LVAL_OBJ, vm_closure_create(main));
     //todo: init
     //apply main function

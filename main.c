@@ -188,21 +188,29 @@ void compileunit_free(CompileUnit* cu) {
     localchart_free(cu->locals_chart);
 }
 
-
-// a compile unit is transformed into a lobj of type OBJ with CLOSURE via copy
-lobj compile_unit_get_closure(const CompileUnit* cu) {
+lobj compile_unit_get_closure(CompileUnit* cu) {
     if (!cu) {
-        printf("compile_unit_get_closure: NULL\n");
+        printf("compile_unit_get_fn: NULL\n");
         exit(1);
     };
-
     //this is reallying ugly lol
-    return into_lobj(LVAL_OBJ, vm_closure_create(
-                                        vm_function_create(cu->bytes.item, darray_size(cu->bytes),
-                                                           cu->constants.item, darray_size(cu->constants),
-                                                           cu->arity, lobj_str(cu->name),
-                                                           cu->upvalue_count
-                                                           )));
+    return into_lobj(LVAL_OBJ, vm_closure_create(vm_function_create(cu->bytes.item, darray_size(cu->bytes),
+                                                          cu->constants.item, darray_size(cu->constants),
+                                                          cu->arity, lobj_str(cu->name),
+                                                          cu->upvalue_count)));
+}
+
+// a compile unit is transformed into a lobj of type OBJ with CLOSURE via copy
+lobj compile_unit_get_fn(const CompileUnit* cu) {
+    if (!cu) {
+        printf("compile_unit_get_fn: NULL\n");
+        exit(1);
+    };
+    //this is reallying ugly lol
+    return into_lobj(LVAL_OBJ, vm_function_create(cu->bytes.item, darray_size(cu->bytes),
+                                                          cu->constants.item, darray_size(cu->constants),
+                                                          cu->arity, lobj_str(cu->name),
+                                                          cu->upvalue_count));
 }
 
 typedef struct {
@@ -369,9 +377,15 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
         return -1;
     }
     const int result = localchart_resolve_symbol(cu->locals_chart, symbol);
-    if (result != -1) {
-        return add_upvalue(cu->enclosing, (uint8_t)result, true);
+    if (result != -1) { // if it is not a local
+        return add_upvalue(cu->enclosing, result, true);
     }
+
+    const int res = resolve_upvalue(cu->enclosing, symbol); // recursively check enclosing compile unit
+    if (res != -1) {
+        return add_upvalue(cu->enclosing, res, false);
+    }
+
     return -1;
 }
 
@@ -407,9 +421,9 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_write_byte(compiler,I_GET_GLOBAL);
                     compiler_write_byte(compiler, new_size-1);                    
                 } else {
-                    
+                    compiler_write_byte(compiler,I_GET_UPVALUE);
+                    compiler_write_byte(compiler, (uint8_t)upvalue_location);
                     // resolve upvalue
-
                 }
 
             }
@@ -492,8 +506,16 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     }
                     compiler_write_byte(compiler, I_RETURN);
 
+                    const lobj new_fn = compile_unit_get_fn(cu);
 
-                    const lobj new_closure = compile_unit_get_closure(cu);
+                    for (int i = 0; i < cu->upvalue_count; i++) {
+                        const Upvalue* up = &cu->upvalues[i];
+#ifdef DEBUG
+                        printf("Writing upvalue to runtime islocal=%d index=%d", up->is_local, up->index);
+#endif
+                        compiler_write_byte(compiler, up->is_local ? 0 : 1);
+                        compiler_write_byte(compiler, up->index);
+                    }
 
 #ifdef DEBUG
                 
@@ -504,9 +526,10 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // Return to previous pointer as current unit. 
                     compiler->current_unit = prev;
                     // adding the closure unit into the constant pool
-                    compiler_load_const(compiler, new_closure);
+                    compiler_load_const(compiler, new_fn);
+                    compiler_write_byte(compiler,I_CLOSURE);
+                    // the closure's name is set as a global variable, but it wouldn't make sense for global
 
-                    // the closure's name is set as a global variable
                     const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
                     compiler_write_byte(compiler, I_SET_GLOBAL);
                     compiler_write_byte(compiler, str_loc-1);
@@ -653,6 +676,14 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, local_index);
                     } else {
+                        const int upvalue_location = resolve_upvalue(compiler->current_unit, symbol);
+                        if (upvalue_location != -1) {
+                            compiler_write_byte(compiler, I_SET_UPVALUE);
+                            compiler_write_byte(compiler, (uint8_t)upvalue_location);
+                        } else {
+                            printf("Could not resolve symbol %s while setting variable\n", ident);
+                            exit(1);
+                        }
                         //todo: string intern, check for existence
 
                     }
@@ -700,7 +731,7 @@ int main(int argc, char **argv) {
     puts("Press Ctrl+c to Exit\n");
     
     if (argc > 1 && strcmp(argv[1], "-e") == 0) {
-        if (argc >= 2) {
+        if (argc == 2) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
@@ -767,7 +798,63 @@ int main(int argc, char **argv) {
             vm_free(&vm);
 
         } else {
-            return 1;
+            size_t read;
+            const char* program = read_file(argv[2], &read);
+            if (program == NULL) {
+                printf("Could not read file\n");
+                return 1;
+            }
+            printf("program:\n '%s'\n", program);
+            size_t count;
+            SExpr **exprs = read_all(program, &count); // or read appropriate function
+            printf("Number of expressions: %zu\n", count);
+
+            HashTable globals, strings;
+            table_create(&globals);
+            table_create(&strings);
+
+            Compiler compiler;
+            compiler_create(&compiler, &globals, &strings);
+            for (size_t i = 0; i < count; i++) {
+                emit(&compiler, exprs[i]);
+            }
+
+            // done with s expressions. we free all of them
+            for(int i =0; i < count; i++) {
+                free_sexpr(exprs[i]);
+            }
+
+            CompileUnit* main_fn= compiler.current_unit;
+            if(main_fn == NULL) {
+                printf("main function entry point not found");
+                exit(1);
+            }
+            darray_push(main_fn->bytes, I_RETURN);
+
+
+            lobj main = compile_unit_get_closure(main_fn);
+#ifdef DEBUG
+            uint8_t* b;
+            darray_foreach(b, main_fn->bytes) {
+                printf("%d ", *b);
+            }
+            printf("\n");
+#endif
+            // lifetime of compiler is done.
+            // I have transformed all compile units into functions / constants
+            compiler_destroy(&compiler);
+
+            VM vm;
+            vm_create(&vm, &globals, &strings, &main);
+            vm_exec(&vm, 0);
+
+
+
+            vm_free(&vm);
+            free((void*)program);
+
+
+            return 0;
         }
     } else {
         // while (true) {

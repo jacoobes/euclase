@@ -10,23 +10,24 @@ project(asm LANGUAGES C)
 # target
 add_executable(asm "")
 set_target_properties(asm PROPERTIES OUTPUT_NAME "asm")
-set_target_properties(asm PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
+set_target_properties(asm PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x64/release")
 add_dependencies(asm solid-waffle)
 target_compile_definitions(asm PRIVATE
     DEBUG
 )
 target_compile_options(asm PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    $<$<COMPILE_LANGUAGE:C>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CXX>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CUDA>:-DNDEBUG>
 )
 if(MSVC)
-    target_compile_options(asm PRIVATE $<$<CONFIG:Debug>:-Od>)
+    target_compile_options(asm PRIVATE $<$<CONFIG:Release>:-O2>)
 else()
-    target_compile_options(asm PRIVATE -O0)
+    target_compile_options(asm PRIVATE -O3)
 endif()
 if(MSVC)
-    target_compile_options(asm PRIVATE -Zi)
 else()
-    target_compile_options(asm PRIVATE -g)
+    target_compile_options(asm PRIVATE -fvisibility=hidden)
 endif()
 if(MSVC)
     set_property(TARGET asm PROPERTY
@@ -36,7 +37,7 @@ target_link_libraries(asm PRIVATE
     solid-waffle
 )
 target_link_directories(asm PRIVATE
-    build/windows/x86/debug
+    build/windows/x64/release
 )
 target_sources(asm PRIVATE
     asm.c
@@ -45,25 +46,26 @@ target_sources(asm PRIVATE
 # target
 add_executable(main "")
 set_target_properties(main PROPERTIES OUTPUT_NAME "main")
-set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
+set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x64/release")
 add_dependencies(main solid-waffle)
 target_compile_definitions(main PRIVATE
     DEBUG
 )
 target_compile_options(main PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    $<$<COMPILE_LANGUAGE:C>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CXX>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CUDA>:-DNDEBUG>
 )
 set_target_properties(main PROPERTIES C_EXTENSIONS OFF)
 target_compile_features(main PRIVATE c_std_11)
 if(MSVC)
-    target_compile_options(main PRIVATE $<$<CONFIG:Debug>:-Od>)
+    target_compile_options(main PRIVATE $<$<CONFIG:Release>:-O2>)
 else()
-    target_compile_options(main PRIVATE -O0)
+    target_compile_options(main PRIVATE -O3)
 endif()
 if(MSVC)
-    target_compile_options(main PRIVATE -Zi)
 else()
-    target_compile_options(main PRIVATE -g)
+    target_compile_options(main PRIVATE -fvisibility=hidden)
 endif()
 if(MSVC)
     set_property(TARGET main PROPERTY
@@ -73,7 +75,7 @@ target_link_libraries(main PRIVATE
     solid-waffle
 )
 target_link_directories(main PRIVATE
-    build/windows/x86/debug
+    build/windows/x64/release
 )
 target_sources(main PRIVATE
     main.c
@@ -82,22 +84,23 @@ target_sources(main PRIVATE
 # target
 add_library(solid-waffle STATIC "")
 set_target_properties(solid-waffle PROPERTIES OUTPUT_NAME "solid-waffle")
-set_target_properties(solid-waffle PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
+set_target_properties(solid-waffle PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x64/release")
 target_compile_definitions(solid-waffle PRIVATE
     DEBUG
 )
 target_compile_options(solid-waffle PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    $<$<COMPILE_LANGUAGE:C>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CXX>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CUDA>:-DNDEBUG>
 )
 if(MSVC)
-    target_compile_options(solid-waffle PRIVATE $<$<CONFIG:Debug>:-Od>)
+    target_compile_options(solid-waffle PRIVATE $<$<CONFIG:Release>:-O2>)
 else()
-    target_compile_options(solid-waffle PRIVATE -O0)
+    target_compile_options(solid-waffle PRIVATE -O3)
 endif()
 if(MSVC)
-    target_compile_options(solid-waffle PRIVATE -Zi)
 else()
-    target_compile_options(solid-waffle PRIVATE -g)
+    target_compile_options(solid-waffle PRIVATE -fvisibility=hidden)
 endif()
 if(MSVC)
     set_property(TARGET solid-waffle PROPERTY
@@ -115,22 +118,23 @@ target_sources(solid-waffle PRIVATE
 # target
 add_executable(testcompiler "")
 set_target_properties(testcompiler PROPERTIES OUTPUT_NAME "testcompiler")
-set_target_properties(testcompiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
+set_target_properties(testcompiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x64/release")
 add_dependencies(testcompiler solid-waffle)
 target_compile_options(testcompiler PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    $<$<COMPILE_LANGUAGE:C>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CXX>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CUDA>:-DNDEBUG>
 )
 set_target_properties(testcompiler PROPERTIES C_EXTENSIONS OFF)
 target_compile_features(testcompiler PRIVATE c_std_11)
 if(MSVC)
-    target_compile_options(testcompiler PRIVATE $<$<CONFIG:Debug>:-Od>)
+    target_compile_options(testcompiler PRIVATE $<$<CONFIG:Release>:-O2>)
 else()
-    target_compile_options(testcompiler PRIVATE -O0)
+    target_compile_options(testcompiler PRIVATE -O3)
 endif()
 if(MSVC)
-    target_compile_options(testcompiler PRIVATE -Zi)
 else()
-    target_compile_options(testcompiler PRIVATE -g)
+    target_compile_options(testcompiler PRIVATE -fvisibility=hidden)
 endif()
 if(MSVC)
     set_property(TARGET testcompiler PROPERTY
@@ -140,7 +144,7 @@ target_link_libraries(testcompiler PRIVATE
     solid-waffle
 )
 target_link_directories(testcompiler PRIVATE
-    build/windows/x86/debug
+    build/windows/x64/release
 )
 target_sources(testcompiler PRIVATE
     test/compiler_test.c
@@ -149,22 +153,23 @@ target_sources(testcompiler PRIVATE
 # target
 add_executable(testreader "")
 set_target_properties(testreader PROPERTIES OUTPUT_NAME "testreader")
-set_target_properties(testreader PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
+set_target_properties(testreader PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x64/release")
 add_dependencies(testreader solid-waffle)
 target_compile_options(testreader PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    $<$<COMPILE_LANGUAGE:C>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CXX>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CUDA>:-DNDEBUG>
 )
 set_target_properties(testreader PROPERTIES C_EXTENSIONS OFF)
 target_compile_features(testreader PRIVATE c_std_11)
 if(MSVC)
-    target_compile_options(testreader PRIVATE $<$<CONFIG:Debug>:-Od>)
+    target_compile_options(testreader PRIVATE $<$<CONFIG:Release>:-O2>)
 else()
-    target_compile_options(testreader PRIVATE -O0)
+    target_compile_options(testreader PRIVATE -O3)
 endif()
 if(MSVC)
-    target_compile_options(testreader PRIVATE -Zi)
 else()
-    target_compile_options(testreader PRIVATE -g)
+    target_compile_options(testreader PRIVATE -fvisibility=hidden)
 endif()
 if(MSVC)
     set_property(TARGET testreader PROPERTY
@@ -174,7 +179,7 @@ target_link_libraries(testreader PRIVATE
     solid-waffle
 )
 target_link_directories(testreader PRIVATE
-    build/windows/x86/debug
+    build/windows/x64/release
 )
 target_sources(testreader PRIVATE
     test/test_reader.c
@@ -183,22 +188,23 @@ target_sources(testreader PRIVATE
 # target
 add_executable(teststring "")
 set_target_properties(teststring PROPERTIES OUTPUT_NAME "teststring")
-set_target_properties(teststring PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
+set_target_properties(teststring PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x64/release")
 add_dependencies(teststring solid-waffle)
 target_compile_options(teststring PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    $<$<COMPILE_LANGUAGE:C>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CXX>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CUDA>:-DNDEBUG>
 )
 set_target_properties(teststring PROPERTIES C_EXTENSIONS OFF)
 target_compile_features(teststring PRIVATE c_std_11)
 if(MSVC)
-    target_compile_options(teststring PRIVATE $<$<CONFIG:Debug>:-Od>)
+    target_compile_options(teststring PRIVATE $<$<CONFIG:Release>:-O2>)
 else()
-    target_compile_options(teststring PRIVATE -O0)
+    target_compile_options(teststring PRIVATE -O3)
 endif()
 if(MSVC)
-    target_compile_options(teststring PRIVATE -Zi)
 else()
-    target_compile_options(teststring PRIVATE -g)
+    target_compile_options(teststring PRIVATE -fvisibility=hidden)
 endif()
 if(MSVC)
     set_property(TARGET teststring PROPERTY
@@ -208,7 +214,7 @@ target_link_libraries(teststring PRIVATE
     solid-waffle
 )
 target_link_directories(teststring PRIVATE
-    build/windows/x86/debug
+    build/windows/x64/release
 )
 target_sources(teststring PRIVATE
     test/test_solid_str.c
@@ -217,22 +223,23 @@ target_sources(teststring PRIVATE
 # target
 add_executable(testtable "")
 set_target_properties(testtable PROPERTIES OUTPUT_NAME "testtable")
-set_target_properties(testtable PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
+set_target_properties(testtable PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x64/release")
 add_dependencies(testtable solid-waffle)
 target_compile_options(testtable PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    $<$<COMPILE_LANGUAGE:C>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CXX>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CUDA>:-DNDEBUG>
 )
 set_target_properties(testtable PROPERTIES C_EXTENSIONS OFF)
 target_compile_features(testtable PRIVATE c_std_11)
 if(MSVC)
-    target_compile_options(testtable PRIVATE $<$<CONFIG:Debug>:-Od>)
+    target_compile_options(testtable PRIVATE $<$<CONFIG:Release>:-O2>)
 else()
-    target_compile_options(testtable PRIVATE -O0)
+    target_compile_options(testtable PRIVATE -O3)
 endif()
 if(MSVC)
-    target_compile_options(testtable PRIVATE -Zi)
 else()
-    target_compile_options(testtable PRIVATE -g)
+    target_compile_options(testtable PRIVATE -fvisibility=hidden)
 endif()
 if(MSVC)
     set_property(TARGET testtable PROPERTY
@@ -242,7 +249,7 @@ target_link_libraries(testtable PRIVATE
     solid-waffle
 )
 target_link_directories(testtable PRIVATE
-    build/windows/x86/debug
+    build/windows/x64/release
 )
 target_sources(testtable PRIVATE
     test/test_table.c
@@ -251,22 +258,23 @@ target_sources(testtable PRIVATE
 # target
 add_executable(testvm "")
 set_target_properties(testvm PROPERTIES OUTPUT_NAME "testvm")
-set_target_properties(testvm PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x86/debug")
+set_target_properties(testvm PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/windows/x64/release")
 add_dependencies(testvm solid-waffle)
 target_compile_options(testvm PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    $<$<COMPILE_LANGUAGE:C>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CXX>:-DNDEBUG>
+    $<$<COMPILE_LANGUAGE:CUDA>:-DNDEBUG>
 )
 set_target_properties(testvm PROPERTIES C_EXTENSIONS OFF)
 target_compile_features(testvm PRIVATE c_std_11)
 if(MSVC)
-    target_compile_options(testvm PRIVATE $<$<CONFIG:Debug>:-Od>)
+    target_compile_options(testvm PRIVATE $<$<CONFIG:Release>:-O2>)
 else()
-    target_compile_options(testvm PRIVATE -O0)
+    target_compile_options(testvm PRIVATE -O3)
 endif()
 if(MSVC)
-    target_compile_options(testvm PRIVATE -Zi)
 else()
-    target_compile_options(testvm PRIVATE -g)
+    target_compile_options(testvm PRIVATE -fvisibility=hidden)
 endif()
 if(MSVC)
     set_property(TARGET testvm PROPERTY
@@ -276,7 +284,7 @@ target_link_libraries(testvm PRIVATE
     solid-waffle
 )
 target_link_directories(testvm PRIVATE
-    build/windows/x86/debug
+    build/windows/x64/release
 )
 target_sources(testvm PRIVATE
     test/vmtest.c

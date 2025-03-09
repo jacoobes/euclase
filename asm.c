@@ -153,7 +153,14 @@ int asm_compile(Assembler* a, const char* source) {
                     printf("Could not find label %s", tokname);
                     exit(1);
                 }
-                vm_function* fn = vm_function_create(addr->code, addr->count, addr->constants, addr->constants_count, addr->arity, lobj_str(tokname));
+                vm_function* fn = vm_function_create(
+                    addr->code,
+                    addr->count,
+                    addr->constants,
+                    addr->constants_count,
+                    addr->arity,
+                    lobj_str(tokname),
+                    0);
                 int constant = add_constant( a, into_lobj(LVAL_OBJ, vm_closure_create(fn)));
                 write_byte(a, constant);
             } else {
@@ -231,7 +238,7 @@ lobj asm_get_entry(Assembler* a) {
     vm_function* f = vm_function_create(
                        l->code, l->count,
                        l->constants, l->constants_count,
-                       l->arity, lobj_str("__main__"));
+                       l->arity, lobj_str("__main__"), 0);
     return into_lobj(LVAL_OBJ, vm_closure_create(f));
 }
 

@@ -8,4 +8,4 @@
     (if (<= x 2) x  (* x (fact (- x 1)))))
 
 
-(sad 5)
+(fact 4)
