@@ -350,11 +350,11 @@ void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_l
     darray_push(cur_unit->bytes, jump_loc & 0xff);
 }
 
-int add_upvalue(CompileUnit* cu, uint8_t index, bool is_local  ) {
+int add_upvalue(CompileUnit* cu, const uint8_t index, const bool is_local  ) {
 
     // find duplicates for upvalue, since a "closure may reference the same variable in a surrounding function multiple times" 
     for (int i = 0; i < cu->upvalue_count; i++) {
-        Upvalue* upv = &cu->upvalues[i]; 
+        const Upvalue* upv = &cu->upvalues[i];
         if(upv->index == index && upv->is_local == is_local) {
             return i; 
         }
@@ -369,7 +369,7 @@ int add_upvalue(CompileUnit* cu, uint8_t index, bool is_local  ) {
     return cu->upvalue_count++;
 }
 
-int resolve_upvalue(CompileUnit* cu, const char* symbol) {
+int resolve_upvalue(const CompileUnit* cu, const char* symbol) {
     // going up the compile-unit stack 
     // resolving where the upvalue is.
     // we also know that we checked local symbols already.
@@ -530,9 +530,14 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_write_byte(compiler,I_CLOSURE);
                     // the closure's name is set as a global variable, but it wouldn't make sense for global
 
-                    const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
-                    compiler_write_byte(compiler, I_SET_GLOBAL);
-                    compiler_write_byte(compiler, str_loc-1);
+                    if (compiler->current_unit->enclosing == NULL) {
+                        const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
+                        compiler_write_byte(compiler, I_SET_GLOBAL);
+                        compiler_write_byte(compiler, str_loc-1);
+                    } else {
+
+                    }
+
                 }
                 else if(strcmp(symbol, "+") == 0)  { emit_bin_op(compiler, I_ADD, rest); }
                 else if(strcmp(symbol, "-") == 0)  { emit_bin_op(compiler, I_SUB, rest); }
