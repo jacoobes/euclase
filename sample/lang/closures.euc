@@ -1,0 +1,10 @@
+(fn (cookie (a))  
+    (fn (brownie (c))
+        (+ a c)))
+
+
+(var brown (cookie 5))
+
+(brown 5)
+
+
