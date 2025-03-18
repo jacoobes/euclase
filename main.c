@@ -528,16 +528,17 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // adding the closure unit into the constant pool
                     compiler_load_const(compiler, new_fn);
                     compiler_write_byte(compiler,I_CLOSURE);
-                    // the closure's name is set as a global variable, but it wouldn't make sense for global
 
+                    // the closure's name is set as a global variable, but it wouldn't make sense for global
                     if (compiler->current_unit->enclosing == NULL) {
                         const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
                         compiler_write_byte(compiler, I_SET_GLOBAL);
                         compiler_write_byte(compiler, str_loc-1);
                     } else {
-
+                        const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
+                        compiler_write_byte(compiler, I_SET_LOCAL);
+                        compiler_write_byte(compiler, reg);
                     }
-
                 }
                 else if(strcmp(symbol, "+") == 0)  { emit_bin_op(compiler, I_ADD, rest); }
                 else if(strcmp(symbol, "-") == 0)  { emit_bin_op(compiler, I_SUB, rest); }
@@ -719,7 +720,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     printf("emitting: I_CALL %d for %s\n", argc, symbol);
 #endif
                 }
-
             }  
             else {
                 printf("TODO\n");
@@ -783,22 +783,11 @@ int main(int argc, char **argv) {
 
 
             lobj main = compile_unit_get_closure(main_fn);
-#ifdef DEBUG
-            uint8_t* b;
-            darray_foreach(b, main_fn->bytes) {
-                printf("%d ", *b);
-            }
-            printf("\n");
-#endif
-            // lifetime of compiler is done.
-            // I have transformed all compile units into functions / constants
             compiler_destroy(&compiler);
 
             VM vm;
             vm_create(&vm, &globals, &strings, &main);
             vm_exec(&vm, 0);
-
-
 
             vm_free(&vm);
 
@@ -852,7 +841,6 @@ int main(int argc, char **argv) {
             VM vm;
             vm_create(&vm, &globals, &strings, &main);
             vm_exec(&vm, 0);
-
 
 
             vm_free(&vm);
