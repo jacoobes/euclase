@@ -123,8 +123,8 @@ int localchart_resolve_symbol(const LocalChart* lc, const char* symbol) {
 }
 int localchart_insert(LocalChart *lc, const char* symbol) {
     if(darray_size(lc->locals) == 256) {
-        printf("Variable overflow. Reached maximum variables per scope (256)");
-        return -1;
+        fprintf(stderr, "Variable overflow. Reached maximum variables per scope (256)");
+        exit(1);
     }
     Local* local;
     darray_foreach(local, lc->locals) {
@@ -530,12 +530,21 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_write_byte(compiler,I_CLOSURE);
 
                     // the closure's name is set as a global variable, but it wouldn't make sense for global
-                    if (compiler->current_unit->enclosing == NULL) {
+                    localchart_leave_scope(compiler->current_unit->locals_chart);
+
+                    if (compiler->current_unit->locals_chart->cur_depth == 0) {
                         const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
+
                         compiler_write_byte(compiler, I_SET_GLOBAL);
                         compiler_write_byte(compiler, str_loc-1);
                     } else {
+                        // TODO: check if reg is -1
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
+
+                        if (reg == -1) {
+                            fprintf(stderr,"function already declared\n");
+                            exit(1);
+                        }
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
                     }
@@ -570,7 +579,8 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         emit(compiler, rhs);
 
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, lhs->value.symbol);
-                        compiler_write_byte(compiler, I_SET_LOCAL); compiler_write_byte(compiler, reg);
+                        compiler_write_byte(compiler, I_SET_LOCAL);
+                        compiler_write_byte(compiler, reg);
                         even+=1;
                         cur_exp = next;
                     }
