@@ -307,7 +307,7 @@ int vm_exec(VM *vm, int flags) {
                 vm_push(vm, into_lobj(LVAL_OBJ, closure));
                 // I_CLOSURE is a variable length instruction, depending on
                 // upvalue count.
-
+                printf("closure upvalue count %d\n", closure->upvalues_ct);
                 for (int i = 0; i < closure->upvalues_ct; i++) {
                     uint8_t isLocal = READ_BYTE();
                     uint8_t index = READ_BYTE();
@@ -329,7 +329,7 @@ int vm_exec(VM *vm, int flags) {
 #endif
                 lobj v;
                 if(!table_get(vm->globals, name, &v)) {
-                    printf("variable not found");
+                    printf("variable %s not found", SOLID_STR_TO_C(name->contents));
                     //variable not found
                     return 1;
                 }

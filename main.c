@@ -34,6 +34,9 @@ void add_history(char *unused) {}
 #include "darray.h"  // Assuming you have a header file defining the darray macros and functions
 
 
+#define QUOTE(...) #__VA_ARGS__
+
+
 #define UINT8_COUNT (UINT8_MAX + 1)
 
 typedef struct Local {
@@ -363,10 +366,10 @@ int add_upvalue(CompileUnit* cu, const uint8_t index, const bool is_local  ) {
         printf("Maximum upvalue count exceeded: %d\n", UINT8_MAX);
         exit(1);
     }
-
     cu->upvalues[cu->upvalue_count].index = index;
     cu->upvalues[cu->upvalue_count].is_local = false;
-    return cu->upvalue_count++;
+    cu->upvalue_count++;
+    return cu->upvalue_count;
 }
 
 int resolve_upvalue(const CompileUnit* cu, const char* symbol) {
@@ -472,10 +475,10 @@ void emit(Compiler* compiler, SExpr *sexpr) {
 
                     // first class functions are just variables in disguise, that's why clojure's
                     // defn is just syntax over def and f
-                    CompileUnit* prev = compiler->current_unit;
                     CompileUnit* cu = compileunit_create(fn_name->value.symbol, sexpr_list_len(args) );
+                    cu->enclosing = compiler->current_unit;
                     compiler->current_unit = cu;
-                    
+
 
                     //enter the scope of the currently compiling function
                     localchart_enter_scope(compiler->current_unit->locals_chart);
@@ -511,20 +514,14 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     for (int i = 0; i < cu->upvalue_count; i++) {
                         const Upvalue* up = &cu->upvalues[i];
 #ifdef DEBUG
-                        printf("Writing upvalue to runtime islocal=%d index=%d", up->is_local, up->index);
+                        printf("Writing upvalue to runtime islocal=%d index=%d\n", up->is_local, up->index);
 #endif
                         compiler_write_byte(compiler, up->is_local ? 0 : 1);
                         compiler_write_byte(compiler, up->index);
                     }
 
-#ifdef DEBUG
-                
-                    printf("emitting function done %s\n", fn_name->value.symbol);
-#endif
-
-
-                    // Return to previous pointer as current unit. 
-                    compiler->current_unit = prev;
+                    // Return to previous pointer as current unit.
+                    compiler->current_unit = compiler->current_unit->enclosing;
                     // adding the closure unit into the constant pool
                     compiler_load_const(compiler, new_fn);
                     compiler_write_byte(compiler,I_CLOSURE);
@@ -536,9 +533,13 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
 
                         compiler_write_byte(compiler, I_SET_GLOBAL);
-                        compiler_write_byte(compiler, str_loc-1);
+                        compiler_write_byte(compiler, str_loc);
+#ifdef DEBUG
+
+                        printf("emitting global function %s\n", fn_name->value.symbol);
+#endif
+
                     } else {
-                        // TODO: check if reg is -1
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
 
                         if (reg == -1) {
@@ -547,6 +548,9 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         }
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
+#ifdef DEBUG
+                        printf("emitting local function %s\n", fn_name->value.symbol);
+#endif
                     }
                 }
                 else if(strcmp(symbol, "+") == 0)  { emit_bin_op(compiler, I_ADD, rest); }
@@ -750,13 +754,16 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* fib ="(fn (fact (x))"
-                              " (if (<= x 2) x (* x (fact (- x 1)))))"
-                             "               "
-                             "(fn (add (x y))"
-                             "  (+ x y))"
-                             "          "
-                             "(add (fact 10) (fact 5))";
+            const char* fib = QUOTE(
+                (fn (cookie ())
+                    (let (a 1)
+                       (fn (brownie (c))
+                           (+ a c))))
+
+                (var brown (cookie))
+
+                (brown 10)       
+            );
 
             const char* global_vars = "(var a 5)\n"
                                             "(+ a (+ 120 1))\n";
