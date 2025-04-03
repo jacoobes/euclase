@@ -533,11 +533,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
 
                         compiler_write_byte(compiler, I_SET_GLOBAL);
-                        compiler_write_byte(compiler, str_loc);
-#ifdef DEBUG
-
-                        printf("emitting global function %s\n", fn_name->value.symbol);
-#endif
+                        compiler_write_byte(compiler, str_loc-1);
 
                     } else {
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
@@ -548,9 +544,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         }
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
-#ifdef DEBUG
-                        printf("emitting local function %s\n", fn_name->value.symbol);
-#endif
                     }
                 }
                 else if(strcmp(symbol, "+") == 0)  { emit_bin_op(compiler, I_ADD, rest); }

@@ -326,6 +326,7 @@ int vm_exec(VM *vm, int flags) {
                 vm_string *name = READ_STRING();
 #ifdef DEBUG
                 printf("GET GLOBAL "); printf("%s\n", SOLID_STR_TO_C(name->contents));
+                table_print(vm->globals);
 #endif
                 lobj v;
                 if(!table_get(vm->globals, name, &v)) {
@@ -350,7 +351,9 @@ int vm_exec(VM *vm, int flags) {
 
                 // set value
                 table_set(vm->globals, name, value);
+                table_print(vm->globals);
                 vm_pop(vm);
+                table_print(vm->globals);
             } break;
             case I_GET_UPVALUE: {
                 uint8_t index = READ_BYTE();

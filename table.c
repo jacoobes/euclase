@@ -68,7 +68,7 @@ int table_set(HashTable* tbl, vm_string* k, const lobj v) {
     }
 
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k);
-    int isNewKey = maybe_entry->key == NULL;
+    const int isNewKey = maybe_entry->key == NULL;
     //increase table count
     if (isNewKey && (IS_NUM(maybe_entry->value) && AS_NUM(maybe_entry->value) == TABLE_TOMBSTONE)) tbl->count++;
     
@@ -133,5 +133,18 @@ vm_string* table_find_string(HashTable* table, const solid_str* ss, uint32_t has
 void table_free(HashTable* table) {
     FREE_ARRAY(TableEntry, table->entries, table->count);
     table_create(table);
+}
+
+void table_print(HashTable* table) {
+    printf("HashTable (capacity: %d, count: %d):\n", table->capacity, table->count);
+    for (int i = 0; i < table->capacity; i++) {
+        TableEntry* entry = &table->entries[i];
+        if (entry->key != NULL) { // Assuming NULL key means an empty slot
+            printf("  [%d]: key = %s, value = (some representation)\n",
+            i, SOLID_STR_TO_C(entry->key->contents) /* Assuming vm_string has a chars field */);
+        } else {
+            printf("  [%d]: <empty>\n", i);
+        }
+    }
 }
 
