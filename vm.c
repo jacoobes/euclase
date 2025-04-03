@@ -353,7 +353,6 @@ int vm_exec(VM *vm, int flags) {
                 table_set(vm->globals, name, value);
                 table_print(vm->globals);
                 vm_pop(vm);
-                table_print(vm->globals);
             } break;
             case I_GET_UPVALUE: {
                 uint8_t index = READ_BYTE();

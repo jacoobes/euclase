@@ -244,6 +244,11 @@ void compiler_destroy(Compiler *compiler) {
     }
 }
 
+void compiler_define_variable(Compiler *compiler, const char* name) {
+
+}
+
+
 static inline int compiler_write_byte(const Compiler *compiler, const uint8_t byte) {
     CompileUnit* cur_unit = compiler->current_unit;
     darray_push(cur_unit->bytes, byte);
@@ -479,7 +484,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     cu->enclosing = compiler->current_unit;
                     compiler->current_unit = cu;
 
-
                     //enter the scope of the currently compiling function
                     localchart_enter_scope(compiler->current_unit->locals_chart);
 
@@ -508,9 +512,12 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_load_const(compiler, lobj_num(0));
                     }
                     compiler_write_byte(compiler, I_RETURN);
-
                     const lobj new_fn = compile_unit_get_fn(cu);
-
+                    // Return to previous pointer as current unit.
+                    compiler->current_unit = compiler->current_unit->enclosing;
+                    // adding the closure unit into the constant pool
+                    compiler_load_const(compiler, new_fn);
+                    compiler_write_byte(compiler,I_CLOSURE);
                     for (int i = 0; i < cu->upvalue_count; i++) {
                         const Upvalue* up = &cu->upvalues[i];
 #ifdef DEBUG
@@ -519,23 +526,10 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_write_byte(compiler, up->is_local ? 0 : 1);
                         compiler_write_byte(compiler, up->index);
                     }
-
-                    // Return to previous pointer as current unit.
-                    compiler->current_unit = compiler->current_unit->enclosing;
-                    // adding the closure unit into the constant pool
-                    compiler_load_const(compiler, new_fn);
-                    compiler_write_byte(compiler,I_CLOSURE);
-
                     // the closure's name is set as a global variable, but it wouldn't make sense for global
-                    localchart_leave_scope(compiler->current_unit->locals_chart);
-
-                    if (compiler->current_unit->locals_chart->cur_depth == 0) {
-                        const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
-
-                        compiler_write_byte(compiler, I_SET_GLOBAL);
-                        compiler_write_byte(compiler, str_loc-1);
-
-                    } else {
+                    // todo. we need a way to declare variables either local or global. i think
+                    // that's whats causing the issues with closures. but
+                    if (compiler->current_unit->locals_chart->cur_depth > 0) {
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
 
                         if (reg == -1) {
@@ -544,6 +538,14 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         }
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
+
+                    } else {
+                        const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
+
+                        compiler_write_byte(compiler, I_SET_GLOBAL);
+                        // why the offset -1? because when we insert with compiler_add_const,
+                        // it returns size after insert. thus, we need to write byte of str_loc - 1 to get location of string
+                        compiler_write_byte(compiler, str_loc-1);
                     }
                 }
                 else if(strcmp(symbol, "+") == 0)  { emit_bin_op(compiler, I_ADD, rest); }
