@@ -326,7 +326,6 @@ int vm_exec(VM *vm, int flags) {
                 vm_string *name = READ_STRING();
 #ifdef DEBUG
                 printf("GET GLOBAL "); printf("%s\n", SOLID_STR_TO_C(name->contents));
-                table_print(vm->globals);
 #endif
                 lobj v;
                 if(!table_get(vm->globals, name, &v)) {

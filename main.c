@@ -244,9 +244,7 @@ void compiler_destroy(Compiler *compiler) {
     }
 }
 
-void compiler_define_variable(Compiler *compiler, const char* name) {
 
-}
 
 
 static inline int compiler_write_byte(const Compiler *compiler, const uint8_t byte) {
@@ -397,8 +395,73 @@ int resolve_upvalue(const CompileUnit* cu, const char* symbol) {
     return -1;
 }
 
+void compiler_bind_localsymbol(const Compiler* compiler, char* symbol) {
+    const CompileUnit* cur_unit = compiler->current_unit;
+    LocalChart* lc = cur_unit->locals_chart;
 
 
+    const int local_location = localchart_resolve_symbol(lc, symbol);
+    if (local_location == -1) {
+        const int res = localchart_insert(lc, symbol);
+        compiler_write_byte(compiler, I_SET_LOCAL);
+        compiler_write_byte(compiler, res);
+#ifdef DEBUG
+        printf("emitting symbol: I_SET_LOCAL %s, %d\n",symbol, res); ;
+#endif
+        return;
+    }
+    const int upvalue_res = resolve_upvalue(compiler->current_unit, symbol);
+    if (upvalue_res == -1) {
+        const int upv_location = add_upvalue(compiler->current_unit, upvalue_res, true);
+        compiler_write_byte(compiler, I_SET_UPVALUE);
+        compiler_write_byte(compiler, upv_location);
+#ifdef DEBUG
+        printf("emitting symbol: I_SET_UPVALUE %s, %d\n",symbol, upv_location); ;
+#endif
+        return;
+    }
+    printf("Could not bind %s\n", symbol);
+    exit(1);
+
+}
+
+void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
+
+    const LocalChart* lc = compiler->current_unit->locals_chart;
+    const int local_index = localchart_resolve_symbol(lc, name);
+
+    //if local was found
+    if (local_index != -1) {
+#ifdef DEBUG
+        printf("emitting symbol: I_GET_LOCAL %s, %d\n", name, local_index); ;
+#endif
+        compiler_write_byte(compiler,  I_GET_LOCAL);
+        compiler_write_byte(compiler,  local_index);
+        return;
+    }
+
+    const int upvalue_location = resolve_upvalue(compiler->current_unit, name);
+    if (upvalue_location != -1) {
+        compiler_write_byte(compiler,  I_GET_UPVALUE);
+        compiler_write_byte(compiler,  upvalue_location);
+        return;
+    }
+    // if global
+    if (compiler->current_unit->enclosing == NULL) {
+        // str dupe symbol
+        const int new_size = compiler_add_const(compiler, lobj_str(name));
+        compiler_write_byte(compiler,I_GET_GLOBAL);
+        compiler_write_byte(compiler, new_size-1);
+#ifdef DEBUG
+        printf("emitting symbol: I_GET_GLOBAL %s, %d\n", name, new_size-1); ;
+#endif
+        return;
+    }
+    printf("Could not resolve variable '%s'. Checked local -> upvalue -> global\n", name);
+    exit(1);
+
+    // nothing found. throw error
+}
 
 // emit essentially transitions parsing lifetime to compile lifetime
 void emit(Compiler* compiler, SExpr *sexpr) {
@@ -413,28 +476,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
         } break;
         case SEXPR_SYMBOL: {
             const char *symbol = cur->value.symbol;
-            const int local_index = localchart_resolve_symbol(compiler->current_unit->locals_chart,symbol);
-            if (local_index != -1) {
-#ifdef DEBUG
-                printf("emitting symbol: I_GET_LOCAL %s, %d\n", symbol, local_index); ;
-#endif
-                compiler_write_byte(compiler,  I_GET_LOCAL);
-                compiler_write_byte(compiler,  local_index);
-            } else {
-                const int upvalue_location = resolve_upvalue(compiler->current_unit, symbol);
-                // upvalue not found
-                if (upvalue_location == -1) {
-                    // str dupe symbol
-                    const int new_size = compiler_add_const(compiler, lobj_str(symbol));
-                    compiler_write_byte(compiler,I_GET_GLOBAL);
-                    compiler_write_byte(compiler, new_size-1);                    
-                } else {
-                    compiler_write_byte(compiler,I_GET_UPVALUE);
-                    compiler_write_byte(compiler, (uint8_t)upvalue_location);
-                    // resolve upvalue
-                }
-
-            }
+            compiler_resolve_symbol(compiler,symbol);
         }
         break;
         case SEXPR_STRING: {
@@ -526,12 +568,8 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_write_byte(compiler, up->is_local ? 0 : 1);
                         compiler_write_byte(compiler, up->index);
                     }
-                    // the closure's name is set as a global variable, but it wouldn't make sense for global
-                    // todo. we need a way to declare variables either local or global. i think
-                    // that's whats causing the issues with closures. but
                     if (compiler->current_unit->locals_chart->cur_depth > 0) {
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
-
                         if (reg == -1) {
                             fprintf(stderr,"function already declared\n");
                             exit(1);
@@ -577,9 +615,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         SExpr* rhs = sexpr_list_first(next);
                         emit(compiler, rhs);
 
-                        const int reg = localchart_insert(compiler->current_unit->locals_chart, lhs->value.symbol);
-                        compiler_write_byte(compiler, I_SET_LOCAL);
-                        compiler_write_byte(compiler, reg);
+                        compiler_bind_localsymbol(compiler, lhs->value.symbol);
                         even+=1;
                         cur_exp = next;
                     }

@@ -140,8 +140,9 @@ void table_print(HashTable* table) {
     for (int i = 0; i < table->capacity; i++) {
         TableEntry* entry = &table->entries[i];
         if (entry->key != NULL) { // Assuming NULL key means an empty slot
-            printf("  [%d]: key = %s, value = (some representation)\n",
-            i, SOLID_STR_TO_C(entry->key->contents) /* Assuming vm_string has a chars field */);
+            printf("  [%d]: key = %s, value =",
+            i, SOLID_STR_TO_C(entry->key->contents));
+            lobj_println(&entry->value);
         } else {
             printf("  [%d]: <empty>\n", i);
         }

@@ -1,9 +1,9 @@
 (fn (cookie ())
-    (let (a 1)
+    (let (a 15)
        (fn (brownie (c))
-           (+ a c))))
+           (+ a c))
+       (brownie 10)))
 
 
-(var brown (cookie))
 
-(brown 10)
+(cookie)
