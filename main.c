@@ -444,6 +444,9 @@ void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
     if (upvalue_location != -1) {
         compiler_write_byte(compiler,  I_GET_UPVALUE);
         compiler_write_byte(compiler,  upvalue_location);
+#ifdef DEBUG
+        printf("emitting symbol: I_GET_UPVALUE %s, %d\n", name, upvalue_location); ;
+#endif
         return;
     }
     // if global
@@ -539,6 +542,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                             printf("arg must be simple symbol");
                             exit(1);
                         }
+
                         localchart_insert(compiler->current_unit->locals_chart, el->value.symbol);
                         //printf(result != -1 ? "inserted\n" : "removed\n");
                     };
