@@ -1,7 +1,5 @@
 (fn (cookie ())
     (let (a 15)
        a
-       (+ a 10)))
-
-
+       ))
 (cookie)

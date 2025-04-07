@@ -1,3 +1,5 @@
+#include "compat.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,29 +8,9 @@
 #include <string.h>
 #include <stdbool.h>
 #include "reader.h"
-/* If we are compiling on Windows compile these functions */
-#ifdef _WIN32
 
-static char buffer[2048];
 
-/* Fake readline function */
-char *readline(const char *prompt) {
-    fputs(prompt, stdout);
-    fgets(buffer, 2048, stdin);
-    char *cpy = malloc(strlen(buffer) + 1);
-    strcpy(cpy, buffer);
-    cpy[strlen(cpy) - 1] = '\0';
-    return cpy;
-}
 
-/* Fake add_history function */
-void add_history(char *unused) {}
-
-/* Otherwise include the edit line headers */
-#else
-#include <editline/readline.h>
-#include <editline/history.h>
-#endif//_WIN32
 
 
 #include "darray.h"  // Assuming you have a header file defining the darray macros and functions
@@ -125,7 +107,7 @@ int localchart_resolve_symbol(const LocalChart* lc, const char* symbol) {
             found = local->reg;
         }
     }
-    printf("Found %d\n", found);
+    //printf("Found %d\n", found);
     return found;
 }
 int localchart_insert(LocalChart *lc, const char* symbol) {
@@ -270,7 +252,7 @@ static inline int compiler_add_const(const Compiler *compiler, const lobj value)
             table_set(compiler->strings, str, lobj_num(1));
             return darray_size(cu->constants);
         }
-        darray_push(cu->constants, into_lobj(LVAL_OBJ, dupe));
+        darray_push(cu->constants, into_lobj(LVAL_OBJ, (void*)dupe));
         vm_string_free(str);
         return darray_size(cu->constants);
     }
@@ -520,7 +502,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         exit(1);
                     }
 #ifdef DEBUG
-                    printf("emitting fn: %s\n", fn_name->value.symbol);
+                    printf("emitting fn: '%s'\n", fn_name->value.symbol);
 #endif
 
                     // first class functions are just variables in disguise, that's why clojure's
@@ -564,15 +546,16 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // adding the closure unit into the constant pool
                     compiler_load_const(compiler, new_fn);
                     compiler_write_byte(compiler,I_CLOSURE);
-                    for (int i = 0; i < cu->upvalue_count; i++) {
+                    /*for (int i = 0; i < cu->upvalue_count; i++) {
                         const Upvalue* up = &cu->upvalues[i];
 #ifdef DEBUG
                         printf("Writing upvalue to runtime islocal=%d index=%d\n", up->is_local, up->index);
 #endif
                         compiler_write_byte(compiler, up->is_local ? 0 : 1);
                         compiler_write_byte(compiler, up->index);
-                    }
+                    }*/
                     if (compiler->current_unit->locals_chart->cur_depth > 0) {
+                        printf("Setting local\n");
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
                         if (reg == -1) {
                             fprintf(stderr,"function already declared\n");
@@ -582,8 +565,8 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_write_byte(compiler, reg);
 
                     } else {
+                        printf("Setting global\n");
                         const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
-
                         compiler_write_byte(compiler, I_SET_GLOBAL);
                         // why the offset -1? because when we insert with compiler_add_const,
                         // it returns size after insert. thus, we need to write byte of str_loc - 1 to get location of string
@@ -656,7 +639,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
 
                     const int str_loc = compiler_add_const(compiler, lobj_str(varname->value.symbol));
                     compiler_write_byte(compiler, I_SET_GLOBAL);
-                    compiler_write_byte(compiler, str_loc);
+                    compiler_write_byte(compiler, str_loc - 1);
                 }  else if (strcmp(symbol, "if") == 0) {
 
                     #define BYTE_LEN \
@@ -753,9 +736,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         exit(1);
                     }
 
-#ifdef DEBUG
-                    printf("emitting call\n");
-#endif
                     //emit I_GET_GLOBAL symbol
                     emit(compiler, list_head);
 

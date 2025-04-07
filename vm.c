@@ -327,6 +327,7 @@ int vm_exec(VM *vm, int flags) {
 #ifdef DEBUG
                 printf("GET GLOBAL "); printf("%s\n", SOLID_STR_TO_C(name->contents));
 #endif
+                table_print(vm->globals);
                 lobj v;
                 if(!table_get(vm->globals, name, &v)) {
                     printf("variable %s not found", SOLID_STR_TO_C(name->contents));

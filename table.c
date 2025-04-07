@@ -3,7 +3,6 @@
 #include "lobj.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
     uint32_t index = k->hash % capacity; 
@@ -114,12 +113,12 @@ vm_string* table_find_string(HashTable* table, const solid_str* ss, uint32_t has
     TableEntry* entry = &table->entries[index];
     if (entry->key == NULL) {
       if(AS_NUM(entry->value) == TABLE_TOMBSTONE) { 
-            //printf("tombstone");
+            printf("tombstone");
             return NULL;
       }
       //printf("null key\n");
     } else if ((solid_strcmp(ss, &entry->key->contents) == 0) && entry->key->hash == hash) {
-        //printf("Found!");
+        printf("Found!");
       // We found it.
       return entry->key;
     } else {
