@@ -4,4 +4,4 @@ out
 build
 .xmake
 cmake-build-debug
-.idea
+.ideaCMakeLists.txt
