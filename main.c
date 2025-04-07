@@ -44,12 +44,14 @@ typedef struct Local {
     size_t depth;
     //can we squish this to a byte? need to bound check locals insert check to ensure
     int reg;
+    bool is_captured;
 } Local;
 
 
 void local_init(Local* lc, const solid_str name, const int depth, const int reg) {
     lc->depth = depth;
     lc->reg=reg;
+    lc->is_captured=false;
     lc->name=name;
 }
 
@@ -107,6 +109,7 @@ size_t localchart_leave_scope(LocalChart* lc) {
         darray_pop(lc->locals);
         removed++;
     }
+    printf("leaving scope\n");
     return removed;
 }
 void localchart_enter_scope(LocalChart* lc) {
@@ -122,6 +125,7 @@ int localchart_resolve_symbol(const LocalChart* lc, const char* symbol) {
             found = local->reg;
         }
     }
+    printf("Found %d\n", found);
     return found;
 }
 int localchart_insert(LocalChart *lc, const char* symbol) {
@@ -382,14 +386,16 @@ int resolve_upvalue(const CompileUnit* cu, const char* symbol) {
     if (cu->enclosing == NULL) {
         return -1;
     }
-    const int result = localchart_resolve_symbol(cu->locals_chart, symbol);
+    //printf("resolving %s in %s\n", symbol, cu->name);
+    const int result = localchart_resolve_symbol(cu->enclosing->locals_chart, symbol);
     if (result != -1) { // if it is not a local
-        return add_upvalue(cu->enclosing, result, true);
+        darray_item(cu->enclosing->locals_chart->locals, result).is_captured = true;
+        return add_upvalue(cu, result, true);
     }
 
     const int res = resolve_upvalue(cu->enclosing, symbol); // recursively check enclosing compile unit
     if (res != -1) {
-        return add_upvalue(cu->enclosing, res, false);
+        return add_upvalue(cu, res, false);
     }
 
     return -1;
@@ -397,31 +403,25 @@ int resolve_upvalue(const CompileUnit* cu, const char* symbol) {
 
 void compiler_bind_localsymbol(const Compiler* compiler, char* symbol) {
     const CompileUnit* cur_unit = compiler->current_unit;
-    LocalChart* lc = cur_unit->locals_chart;
+    const LocalChart* lc = cur_unit->locals_chart;
 
-
-    const int local_location = localchart_resolve_symbol(lc, symbol);
-    if (local_location == -1) {
-        const int res = localchart_insert(lc, symbol);
-        compiler_write_byte(compiler, I_SET_LOCAL);
-        compiler_write_byte(compiler, res);
+    int op = -1;
+    int arg = localchart_resolve_symbol(lc, symbol);
+    if (arg != -1) {
+        op = I_SET_LOCAL;
 #ifdef DEBUG
-        printf("emitting symbol: I_SET_LOCAL %s, %d\n",symbol, res); ;
+        printf("emitting symbol: I_SET_LOCAL %s, %d\n",symbol, arg); ;
 #endif
-        return;
-    }
-    const int upvalue_res = resolve_upvalue(compiler->current_unit, symbol);
-    if (upvalue_res == -1) {
-        const int upv_location = add_upvalue(compiler->current_unit, upvalue_res, true);
-        compiler_write_byte(compiler, I_SET_UPVALUE);
-        compiler_write_byte(compiler, upv_location);
+    } else if ((arg = resolve_upvalue(compiler->current_unit, symbol)) != -1) {
+        op = I_SET_UPVALUE;
 #ifdef DEBUG
-        printf("emitting symbol: I_SET_UPVALUE %s, %d\n",symbol, upv_location); ;
+        printf("emitting symbol: I_SET_UPVALUE %s, %d\n",symbol, arg); ;
 #endif
-        return;
     }
-    printf("Could not bind %s\n", symbol);
-    exit(1);
+    // printf("Could not bind %s\n", symbol);
+    // exit(1);
+    compiler_write_byte(compiler, op);
+    compiler_write_byte(compiler, (uint8_t)arg);
 
 }
 
@@ -619,7 +619,10 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         SExpr* rhs = sexpr_list_first(next);
                         emit(compiler, rhs);
 
-                        compiler_bind_localsymbol(compiler, lhs->value.symbol);
+                        const int reg = localchart_insert(compiler->current_unit->locals_chart, lhs->value.symbol);
+                        compiler_write_byte(compiler, I_SET_LOCAL);
+                        compiler_write_byte(compiler, reg);
+
                         even+=1;
                         cur_exp = next;
                     }
