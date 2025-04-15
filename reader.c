@@ -143,7 +143,7 @@ SExpr *read_atom(const char *input, int *pos) {
     if (cur == '"') {
         return read_string(input, pos);
     }
-    fprintf(stderr, "Failed to read: '%c' while parsing an atom\n", cur);
+    fprintf(stderr, "Failed to read: '%d' while parsing an atom\n", cur);
     exit(1);
 }
 SExpr*  sexpr_list_create() {

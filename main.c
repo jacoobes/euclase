@@ -432,7 +432,7 @@ void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
         return;
     }
     // if global
-    if (compiler->current_unit->enclosing == NULL) {
+    if (lc->cur_depth <= 0) {
         // str dupe symbol
         const int new_size = compiler_add_const(compiler, lobj_str(name));
         compiler_write_byte(compiler,I_GET_GLOBAL);
@@ -442,8 +442,6 @@ void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
 #endif
         return;
     }
-    printf("Could not resolve variable '%s'. Checked local -> upvalue -> global\n", name);
-    exit(1);
 
     // nothing found. throw error
 }
@@ -546,14 +544,14 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // adding the closure unit into the constant pool
                     compiler_load_const(compiler, new_fn);
                     compiler_write_byte(compiler,I_CLOSURE);
-                    /*for (int i = 0; i < cu->upvalue_count; i++) {
+                    for (int i = 0; i < cu->upvalue_count; i++) {
                         const Upvalue* up = &cu->upvalues[i];
 #ifdef DEBUG
                         printf("Writing upvalue to runtime islocal=%d index=%d\n", up->is_local, up->index);
 #endif
                         compiler_write_byte(compiler, up->is_local ? 0 : 1);
                         compiler_write_byte(compiler, up->index);
-                    }*/
+                    }
                     if (compiler->current_unit->locals_chart->cur_depth > 0) {
                         printf("Setting local\n");
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
