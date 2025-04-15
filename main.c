@@ -362,9 +362,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         emit(compiler, sexpr_list_first(b_form));
                     }
                     const size_t removed = compiler_leave_scope(compiler);
-#ifdef DEBUG
-                    printf("removed %zu\n", removed);
-#endif
                     for(size_t i = 0; i < removed; i++ ) {
                         compiler_write_byte(compiler, I_POP);
                     }

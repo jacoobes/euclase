@@ -195,8 +195,8 @@ size_t compiler_leave_scope(Compiler* compiler) {
     if(lc->cur_depth == 0) {
         return 0;
     }
-
     lc->cur_depth--;
+
     int removed = 0;
     while(lc->locals.size != 0) {
         const Local* cur = &(darray_item(lc->locals, darray_size(lc->locals)-1));
