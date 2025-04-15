@@ -1,5 +1,3 @@
-#include "compat.h"
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -772,13 +770,8 @@ int main(int argc, char **argv) {
 //          char *buffer = read_file(filename, &size_read);
             const char* fib = QUOTE(
                 (fn (cookie ())
-                    (let (a 1)
-                       (fn (brownie (c))
-                           (+ a c))))
-
-                (var brown (cookie))
-
-                (brown 10)       
+                    10)
+                (+ (cookie) (cookie))       
             );
 
             const char* global_vars = "(var a 5)\n"

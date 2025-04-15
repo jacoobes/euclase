@@ -2,7 +2,6 @@ add_rules("mode.debug", "mode.release")
 
 target("solid-waffle")
     set_kind("static")
-
     add_files("solid_str.c")
     add_files("lobj.c")
     add_files("memory.c")
