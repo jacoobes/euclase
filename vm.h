@@ -40,6 +40,7 @@ enum Instruction {
     I_CLOSURE     ,
     I_GET_UPVALUE ,
     I_SET_UPVALUE ,
+    I_CLOSE_UPVALUE ,
 };
 
 

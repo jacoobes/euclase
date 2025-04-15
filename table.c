@@ -118,7 +118,6 @@ vm_string* table_find_string(HashTable* table, const solid_str* ss, uint32_t has
       }
       //printf("null key\n");
     } else if ((solid_strcmp(ss, &entry->key->contents) == 0) && entry->key->hash == hash) {
-        printf("Found!");
       // We found it.
       return entry->key;
     } else {

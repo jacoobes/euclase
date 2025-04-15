@@ -68,7 +68,7 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
 }
 
 static vm_upvalue* captureUpvalue(lobj* local) {
-    vm_upvalue* createdUpvalue = vm_upvalues_create(local);
+    vm_upvalue* createdUpvalue = vm_upvalue_create(local);
     return createdUpvalue;
 }
 

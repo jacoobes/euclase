@@ -109,7 +109,7 @@ vm_function* vm_function_create(uint8_t* initial_code,
 vm_closure* vm_closure_create(vm_function* fn);
 vm_string* vm_string_create(const char* contents);
 void vm_string_free(vm_string* s);
-vm_upvalue* vm_upvalues_create(lobj* location);
+vm_upvalue* vm_upvalue_create(lobj* location);
 
 lobj lobj_str(const char *);
 

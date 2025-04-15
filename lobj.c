@@ -17,9 +17,10 @@ hash(const unsigned char *str)
     return hash;
 }
 
-vm_upvalue* vm_upvalues_create(lobj* ref) {
+vm_upvalue* vm_upvalue_create(lobj* ref) {
     vm_upvalue *up = ALLOCATE(vm_upvalue, 1);
     up->location = ref;
+    up->obj.type = OBJ_UPVALUE;
     return up;
 }
 vm_string* vm_string_create(const char* contents) {
