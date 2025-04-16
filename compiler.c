@@ -94,6 +94,7 @@ CompileUnit* compileunit_create(const char* name, const int arity) {
     cu->locals_chart = lc;
 
     cu->upvalue_count = 0;
+
     cu->enclosing=NULL;
     return cu;
 }
@@ -114,7 +115,7 @@ lobj compile_unit_get_closure(CompileUnit* cu) {
         exit(1);
     };
     //this is reallying ugly lol
-    return into_lobj(LVAL_OBJ, vm_closure_create(vm_function_create(cu->bytes.item, darray_size(cu->bytes),
+    return into_lobj(vm_closure_create(vm_function_create(cu->bytes.item, darray_size(cu->bytes),
                                                           cu->constants.item, darray_size(cu->constants),
                                                           cu->arity, lobj_str(cu->name),
                                                           cu->upvalue_count)));
@@ -127,7 +128,7 @@ lobj compile_unit_get_fn(const CompileUnit* cu) {
         exit(1);
     };
     //this is reallying ugly lol
-    return into_lobj(LVAL_OBJ, vm_function_create(cu->bytes.item, darray_size(cu->bytes),
+    return into_lobj(vm_function_create(cu->bytes.item, darray_size(cu->bytes),
                                                           cu->constants.item, darray_size(cu->constants),
                                                           cu->arity, lobj_str(cu->name),
                                                           cu->upvalue_count));
@@ -170,7 +171,7 @@ int compiler_add_const(const Compiler *compiler, const lobj value) {
             table_set(compiler->strings, str, lobj_num(1));
             return darray_size(cu->constants);
         }
-        darray_push(cu->constants, into_lobj(LVAL_OBJ, (void*)dupe));
+        darray_push(cu->constants, into_lobj((void*)dupe));
         vm_string_free(str);
         return darray_size(cu->constants);
     }
@@ -201,7 +202,18 @@ size_t compiler_leave_scope(Compiler* compiler) {
     while(lc->locals.size != 0) {
         const Local* cur = &(darray_item(lc->locals, darray_size(lc->locals)-1));
         if(cur->depth <= lc->cur_depth) break;
-        darray_pop(lc->locals);
+        Local* lcl = &darray_pop(lc->locals);
+        if (lcl->is_captured) {
+            compiler_write_byte(compiler, I_CLOSE_UPVALUE); 
+#ifdef DEBUG
+        printf("ScopeLeave: I_CLOSE_UPVALUE %s\n", SOLID_STR_TO_C(lcl->name));
+#endif
+        } else {
+            compiler_write_byte(compiler, I_POP);
+#ifdef DEBUG
+        printf("ScopeLeave: I_POP %s\n", SOLID_STR_TO_C(lcl->name));
+#endif
+        };
         removed++;
     }
     printf("leaving scope\n");

@@ -161,7 +161,7 @@ int asm_compile(Assembler* a, const char* source) {
                     addr->arity,
                     lobj_str(tokname),
                     0);
-                int constant = add_constant( a, into_lobj(LVAL_OBJ, vm_closure_create(fn)));
+                int constant = add_constant( a, into_lobj(vm_closure_create(fn)));
                 write_byte(a, constant);
             } else {
                 int value = parse_number(operand);
@@ -239,7 +239,7 @@ lobj asm_get_entry(Assembler* a) {
                        l->code, l->count,
                        l->constants, l->constants_count,
                        l->arity, lobj_str("__main__"), 0);
-    return into_lobj(LVAL_OBJ, vm_closure_create(f));
+    return into_lobj(vm_closure_create(f));
 }
 
 void asm_free(Assembler* a) {

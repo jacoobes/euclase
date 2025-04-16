@@ -1,8 +1,8 @@
-#include "./vm.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "./lobj.h"
 #include "table.h"
+#include "./vm.h"
 
 
 static int apply(VM* vm, vm_closure* obj, int argc) {
@@ -51,7 +51,7 @@ lobj vm_peek(const VM* vm, const int distance) {
 void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     reset_stack(vm);
     vm->frame_count=0;
-
+    vm->open_upvalues = NULL;
     // tables should be already initiated
     vm->globals = globals;
     vm->strings = strings;
@@ -67,9 +67,39 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     }
 }
 
-static vm_upvalue* captureUpvalue(lobj* local) {
+static vm_upvalue* captureUpvalue(VM* vm, lobj* local) {
+    vm_upvalue* prevUpvalue = NULL;
+    vm_upvalue* upvalue = vm->open_upvalues;
+    while (upvalue != NULL && upvalue->location > local) {
+        prevUpvalue = upvalue;
+        upvalue = upvalue->next;
+    }
+
+    if (upvalue != NULL && upvalue->location == local) {
+        return upvalue;
+    }
     vm_upvalue* createdUpvalue = vm_upvalue_create(local);
+
+
+    createdUpvalue->next = upvalue;
+  
+    if (prevUpvalue == NULL) {
+      vm->open_upvalues = createdUpvalue;
+    } else {
+      prevUpvalue->next = createdUpvalue;
+    }
+
     return createdUpvalue;
+}
+
+static void closeUpvalues(VM* vm, lobj* last) {
+  while (vm->open_upvalues != NULL &&
+         vm->open_upvalues->location >= last) {
+    vm_upvalue* upvalue = vm->open_upvalues;
+    upvalue->closed = *upvalue->location;
+    upvalue->location = &upvalue->closed;
+    vm->open_upvalues = upvalue->next;
+  }
 }
 
 /*
@@ -144,7 +174,7 @@ int vm_exec(VM *vm, int flags) {
                     lobj result = lobj_num(a.v.num + b.v.num);
                     printf("ADD: "); lobj_println(&result);
                     vm_push(vm, result);
-                } else {
+                } else { printf("b:%d a:%d\n",b.type, a.type);
                     printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror ADD")));
                     return 1;
                 }
@@ -273,12 +303,13 @@ int vm_exec(VM *vm, int flags) {
             case I_RETURN: {
                 lobj value = vm_pop(vm);
 
+                closeUpvalues(vm, cur_frame->slots);
+
                 vm->frame_count--;
 #ifdef DEBUG
                 printf("frame_count %d \n", vm->frame_count);
                 printf("I_RETURN "); lobj_println(&value);
 #endif
-                
                 //return from last frame
                 if(vm->frame_count == 0) {
                     vm_pop(vm);
@@ -304,17 +335,21 @@ int vm_exec(VM *vm, int flags) {
                 //create new closure from existing fn
                 vm_closure* closure = vm_closure_create(fn);
                 //create lobj 
-                vm_push(vm, into_lobj(LVAL_OBJ, closure));
+                vm_push(vm, into_lobj(closure));
                 // I_CLOSURE is a variable length instruction, depending on
                 // upvalue count.
                 printf("closure upvalue count %d\n", closure->upvalues_ct);
                 for (int i = 0; i < closure->upvalues_ct; i++) {
                     uint8_t isLocal = READ_BYTE();
+                    printf("isLocal %d \n", isLocal);
                     uint8_t index = READ_BYTE();
+                    printf("index %d \n", index);
                     if (isLocal) {
                          closure->upvalues[i] =
-                             captureUpvalue(cur_frame->slots + index);
+                             captureUpvalue(vm,cur_frame->slots + index);
                     } else {
+                        printf("cur_frame->closure %d", cur_frame->closure->upvalues_ct);
+//                        printf("%s\n", SOLID_STR_TO_C(AS_STR(cur_frame->closure->fn->name)->contents));
                         // take upvalues from currently 'executing' function
                         closure->upvalues[i] = cur_frame->closure->upvalues[index];
                     }
@@ -327,7 +362,7 @@ int vm_exec(VM *vm, int flags) {
 #ifdef DEBUG
                 printf("GET GLOBAL "); printf("%s\n", SOLID_STR_TO_C(name->contents));
 #endif
-                table_print(vm->globals);
+//                table_print(vm->globals);
                 lobj v;
                 if(!table_get(vm->globals, name, &v)) {
                     printf("variable %s not found", SOLID_STR_TO_C(name->contents));
@@ -351,7 +386,7 @@ int vm_exec(VM *vm, int flags) {
 
                 // set value
                 table_set(vm->globals, name, value);
-                table_print(vm->globals);
+//                table_print(vm->globals);
                 vm_pop(vm);
             } break;
             case I_GET_UPVALUE: {
@@ -362,7 +397,10 @@ int vm_exec(VM *vm, int flags) {
                 uint8_t index = READ_BYTE();
                 *cur_frame->closure->upvalues[index]->location = vm_peek(vm, 0);
             } break;
-
+            case I_CLOSE_UPVALUE: { 
+                closeUpvalues(vm, vm->stack_top - 1);
+                vm_pop(vm);
+            } break;
             default: {
                 printf("Unknown opcode '%c', misalignment?", instruction);
                 return 1;

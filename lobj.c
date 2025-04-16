@@ -21,6 +21,8 @@ vm_upvalue* vm_upvalue_create(lobj* ref) {
     vm_upvalue *up = ALLOCATE(vm_upvalue, 1);
     up->location = ref;
     up->obj.type = OBJ_UPVALUE;
+    up->closed = lobj_num(0);
+    up->next=NULL;
     return up;
 }
 vm_string* vm_string_create(const char* contents) {

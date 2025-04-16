@@ -7,11 +7,7 @@
 #include <stdbool.h>
 #include "reader.h"
 #include "compiler.h"
-
-
-
-
-#include "darray.h"  // Assuming you have a header file defining the darray macros and functions
+#include "darray.h"  
 
 
 #define QUOTE(...) #__VA_ARGS__
@@ -87,25 +83,25 @@ void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_l
 }
 
 int add_upvalue(CompileUnit* cu, const uint8_t index, const bool is_local  ) {
-
+    int upv_count = cu->upvalue_count;
     // find duplicates for upvalue, since a "closure may reference the same variable in a surrounding function multiple times" 
-    for (int i = 0; i < cu->upvalue_count; i++) {
+    for (int i = 0; i < upv_count; i++) {
         const Upvalue* upv = &cu->upvalues[i];
         if(upv->index == index && upv->is_local == is_local) {
             return i; 
         }
     }
-    if (cu->upvalue_count == UINT8_MAX) {
+    if (upv_count == UINT8_MAX) {
         printf("Maximum upvalue count exceeded: %d\n", UINT8_MAX);
         exit(1);
     }
-    cu->upvalues[cu->upvalue_count].index = index;
-    cu->upvalues[cu->upvalue_count].is_local = false;
-    cu->upvalue_count++;
-    return cu->upvalue_count;
+    cu->upvalues[upv_count].index = index;
+    cu->upvalues[upv_count].is_local = false;
+    
+    return cu->upvalue_count++;
 }
 
-int resolve_upvalue(const CompileUnit* cu, const char* symbol) {
+int resolve_upvalue(CompileUnit* cu, const char* symbol) {
     // going up the compile-unit stack 
     // resolving where the upvalue is.
     // we also know that we checked local symbols already.
@@ -114,10 +110,12 @@ int resolve_upvalue(const CompileUnit* cu, const char* symbol) {
         return -1;
     }
     //printf("resolving %s in %s\n", symbol, cu->name);
-    const int result = localchart_resolve_symbol(cu->enclosing->locals_chart, symbol);
+    const LocalChart* enclosing_localchart = cu->enclosing->locals_chart;
+    const int result = localchart_resolve_symbol(enclosing_localchart, symbol);
     if (result != -1) { // if it is not a local
         printf("UpvalueResolution: Found local '%s' in enclosing local chart.\n", symbol);
-        darray_item(cu->enclosing->locals_chart->locals, result).is_captured = true;
+        Local* captured_local = &darray_item(enclosing_localchart->locals, result);
+        captured_local->is_captured = true;
         return add_upvalue(cu, result, true);
     }
 
@@ -215,10 +213,10 @@ void emit(Compiler* compiler, SExpr *sexpr) {
             const vm_string* dupe = table_find_string(compiler->strings, &str->contents, str->hash);
             // if dupe doesn't exist (it's new)
             if(!dupe) {
-                compiler_load_const(compiler, into_lobj(LVAL_OBJ, str));
+                compiler_load_const(compiler, into_lobj(str));
                 table_set(compiler->strings, str, lobj_num(1));
             } else {
-                compiler_load_const(compiler, into_lobj(LVAL_OBJ, (void*)dupe));
+                compiler_load_const(compiler, into_lobj((void*)dupe));
                 vm_string_free(str);
             }
         }
@@ -279,7 +277,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     if (sexpr_list_len(body)) {
                         SExpr* cur_exp;
                         sexpr_list_foreach(cur_exp, body) {
-                            printf("cur form"); print_sexpr(sexpr_list_first(cur_exp)); printf("\n");
+                            // printf("cur form"); print_sexpr(sexpr_list_first(cur_exp)); printf("\n");
                             emit(compiler, sexpr_list_first(cur_exp));
                         };
                     // emit a 0, or falsy in this lang
@@ -290,17 +288,23 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     const lobj new_fn = compile_unit_get_fn(cu);
                     // Return to previous pointer as current unit.
                     compiler->current_unit = compiler->current_unit->enclosing;
+
                     // adding the closure unit into the constant pool
                     compiler_load_const(compiler, new_fn);
+
                     compiler_write_byte(compiler,I_CLOSURE);
                     for (int i = 0; i < cu->upvalue_count; i++) {
-                        const Upvalue* up = &cu->upvalues[i];
+                        // The upvalues come from OUTSIDE the closure, not INSIDE.
+                        // thus, we write that the current frame has a closure with said
+                        // variables
+                        const Upvalue* up = &compiler->current_unit->upvalues[i];
 #ifdef DEBUG
                         printf("Writing upvalue to runtime islocal=%d index=%d\n", up->is_local, up->index);
 #endif
-                        compiler_write_byte(compiler, up->is_local ? 0 : 1);
-                        compiler_write_byte(compiler, up->index);
+                        compiler_write_byte(compiler, up->is_local ? 1 : 0);
+                        compiler_write_byte(compiler, (uint8_t)up->index);
                     }
+
                     if (compiler->current_unit->locals_chart->cur_depth > 0) {
                         printf("Setting local\n");
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
@@ -310,9 +314,8 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         }
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
-
                     } else {
-                        printf("Setting global\n");
+                        // printf("Setting global\n");
                         const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
                         compiler_write_byte(compiler, I_SET_GLOBAL);
                         // why the offset -1? because when we insert with compiler_add_const,
@@ -361,10 +364,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     sexpr_list_foreach(b_form, let_body) {
                         emit(compiler, sexpr_list_first(b_form));
                     }
-                    const size_t removed = compiler_leave_scope(compiler);
-                    for(size_t i = 0; i < removed; i++ ) {
-                        compiler_write_byte(compiler, I_POP);
-                    }
+                    compiler_leave_scope(compiler);
 
                 } else if (strcmp(symbol, "var") == 0) { //global variable
                     const SExpr* varname = sexpr_list_first(rest);
@@ -517,11 +517,12 @@ int main(int argc, char **argv) {
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
             const char* fib = QUOTE(
-                (fn (cookie ()) 
-                    (let (a 10) 
-                        (fn (bookie ()) a)
-                        (bookie))) 
-                (cookie)
+                 (fn (cookie ())
+                    (let (a 15)
+                        (fn (bookie ()) 
+                            (+ a 10))
+                        (bookie)))
+                 (cookie)
             );
 
             const char* global_vars = "(var a 5)\n"

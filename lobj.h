@@ -53,9 +53,12 @@ typedef struct {
     solid_str contents;
 } vm_string;
 
-typedef struct {
+
+typedef struct vm_upvalue {
     vm_object obj;
     lobj* location;
+    lobj closed;
+    struct vm_upvalue *next;
 } vm_upvalue;
 
 typedef struct {
@@ -85,15 +88,16 @@ static inline bool is_str(lobj* lval) {
     return lval->type == LVAL_OBJ && lval->v.obj->type == OBJ_STR;
 }
 
-static inline lobj into_lobj(const LVAL ty, void* l_val) {
-    const lobj lo =  (lobj){
-        .type=ty,
+static inline lobj into_lobj(void* l_val) {
+    return (const lobj){
+        .type=LVAL_OBJ,
         .v.obj=((vm_object*)l_val)
     };
-    return lo;
 };
+
 static inline lobj lobj_num(double x) {
-   return (lobj){.type=LVAL_NUM, .v.num = x };
+   return (const lobj){.type=LVAL_NUM,
+                       .v.num = x };
 }
 
 

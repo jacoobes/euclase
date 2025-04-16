@@ -4,8 +4,6 @@
 #define MAX_LOCALS 256
 #define FRAMES_MAX 256
 
-#define TRUE 1
-#define FALSE 0
 
 #include <stdint.h>
 #include "./table.h"
@@ -73,7 +71,7 @@ typedef struct {
     
     // call stack: functions 
     CallFrame call_stack[DEFAULT_CALL_STACK_SIZE];
-
+    vm_upvalue* open_upvalues;
     vm_closure* main_fn;
     int frame_count;
 } VM;
