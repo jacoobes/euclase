@@ -82,8 +82,8 @@ void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_l
     darray_push(cur_unit->bytes, jump_loc & 0xff);
 }
 
-int add_upvalue(CompileUnit* cu, const uint8_t index, const bool is_local  ) {
-    int upv_count = cu->upvalue_count;
+int add_upvalue(CompileUnit* cu, const uint8_t index, const bool is_local ) {
+    const int upv_count = cu->upvalue_count;
     // find duplicates for upvalue, since a "closure may reference the same variable in a surrounding function multiple times" 
     for (int i = 0; i < upv_count; i++) {
         const Upvalue* upv = &cu->upvalues[i];
@@ -96,8 +96,7 @@ int add_upvalue(CompileUnit* cu, const uint8_t index, const bool is_local  ) {
         exit(1);
     }
     cu->upvalues[upv_count].index = index;
-    cu->upvalues[upv_count].is_local = false;
-    
+    cu->upvalues[upv_count].is_local = is_local;
     return cu->upvalue_count++;
 }
 
@@ -114,15 +113,15 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
     const int result = localchart_resolve_symbol(enclosing_localchart, symbol);
     if (result != -1) { // if it is not a local
         printf("UpvalueResolution: Found local '%s' in enclosing local chart.\n", symbol);
-        Local* captured_local = &darray_item(enclosing_localchart->locals, result);
+        Local* captured_local = &(darray_item(enclosing_localchart->locals, result));
         captured_local->is_captured = true;
-        return add_upvalue(cu, result, true);
+        return add_upvalue(cu, (uint8_t)result, true);
     }
 
     const int res = resolve_upvalue(cu->enclosing, symbol); // recursively check enclosing compile unit
     if (res != -1) {
         printf("UpvalueResolution: Recursively resolved upvalue '%s'\n", symbol);
-        return add_upvalue(cu, res, false);
+        return add_upvalue(cu, (uint8_t)res, false);
     }
 
     printf("UpvalueResolution: could not resolve an upvalue\n");
@@ -133,7 +132,7 @@ void compiler_bind_localsymbol(const Compiler* compiler, char* symbol) {
     const CompileUnit* cur_unit = compiler->current_unit;
     const LocalChart* lc = cur_unit->locals_chart;
 
-    int op = -1;
+    int op;
     int arg = localchart_resolve_symbol(lc, symbol);
     if (arg != -1) {
         op = I_SET_LOCAL;
@@ -142,6 +141,14 @@ void compiler_bind_localsymbol(const Compiler* compiler, char* symbol) {
 #endif
     } else if ((arg = resolve_upvalue(compiler->current_unit, symbol)) != -1) {
         op = I_SET_UPVALUE;
+#ifdef DEBUG
+        printf("emitting symbol: I_SET_UPVALUE %s, %d\n",symbol, arg); ;
+#endif
+    } else {
+        const int str_loc = compiler_add_const(compiler, lobj_str(symbol));
+        op = I_SET_GLOBAL;
+        arg = str_loc;
+
 #ifdef DEBUG
         printf("emitting symbol: I_SET_UPVALUE %s, %d\n",symbol, arg); ;
 #endif
@@ -156,40 +163,31 @@ void compiler_bind_localsymbol(const Compiler* compiler, char* symbol) {
 void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
 
     const LocalChart* lc = compiler->current_unit->locals_chart;
-    const int local_index = localchart_resolve_symbol(lc, name);
-
+    int arg = localchart_resolve_symbol(lc, name);
     //if local was found
-    if (local_index != -1) {
+    if (arg != -1) {
 #ifdef DEBUG
-        printf("emitting symbol: I_GET_LOCAL %s, %d\n", name, local_index); ;
+        printf("emitting symbol: I_GET_LOCAL %s, %d\n", name, arg); ;
 #endif
         compiler_write_byte(compiler,  I_GET_LOCAL);
-        compiler_write_byte(compiler,  local_index);
-        return;
+        compiler_write_byte(compiler,  arg);
     }
-
-    const int upvalue_location = resolve_upvalue(compiler->current_unit, name);
-    if (upvalue_location != -1) {
+    else if ((arg = resolve_upvalue(compiler->current_unit, name)) != -1) {
         compiler_write_byte(compiler,  I_GET_UPVALUE);
-        compiler_write_byte(compiler,  upvalue_location);
+        compiler_write_byte(compiler,  arg);
 #ifdef DEBUG
-        printf("emitting symbol: I_GET_UPVALUE %s, %d\n", name, upvalue_location); ;
+        printf("emitting symbol: I_GET_UPVALUE %s, %d\n", name, arg); ;
 #endif
-        return;
     }
-    // if global
-    if (lc->cur_depth <= 0) {
+    else {
         // str dupe symbol
-        const int new_size = compiler_add_const(compiler, lobj_str(name));
+        arg = compiler_add_const(compiler, lobj_str(name));
         compiler_write_byte(compiler,I_GET_GLOBAL);
-        compiler_write_byte(compiler, new_size-1);
+        compiler_write_byte(compiler, arg-1);
 #ifdef DEBUG
-        printf("emitting symbol: I_GET_GLOBAL %s, %d\n", name, new_size-1); ;
+        printf("emitting symbol: I_GET_GLOBAL %s, %d\n", name, arg-1); ;
 #endif
-        return;
     }
-
-    // nothing found. throw error
 }
 
 // emit essentially transitions parsing lifetime to compile lifetime
@@ -204,8 +202,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
             compiler_load_const(compiler, snum);
         } break;
         case SEXPR_SYMBOL: {
-            const char *symbol = cur->value.symbol;
-            compiler_resolve_symbol(compiler,symbol);
+            compiler_resolve_symbol(compiler,cur->value.symbol);
         }
         break;
         case SEXPR_STRING: {
@@ -248,12 +245,14 @@ void emit(Compiler* compiler, SExpr *sexpr) {
 #ifdef DEBUG
                     printf("emitting fn: '%s'\n", fn_name->value.symbol);
 #endif
+                    // BEGIN WRITING TO NEW FUNCTION
 
                     // first class functions are just variables in disguise, that's why clojure's
                     // defn is just syntax over def and f
                     CompileUnit* cu = compileunit_create(fn_name->value.symbol, sexpr_list_len(args) );
                     cu->enclosing = compiler->current_unit;
                     compiler->current_unit = cu;
+
 
                     //enter the scope of the currently compiling function
                     compiler_enter_scope(compiler);
@@ -280,29 +279,29 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                             // printf("cur form"); print_sexpr(sexpr_list_first(cur_exp)); printf("\n");
                             emit(compiler, sexpr_list_first(cur_exp));
                         };
-                    // emit a 0, or falsy in this lang
+                    // else emit a 0, or falsy in this lang
                     } else {
                         compiler_load_const(compiler, lobj_num(0));
                     }
+
                     compiler_write_byte(compiler, I_RETURN);
+
+                    // END WRITING TO NEW FUNCTION
+
                     const lobj new_fn = compile_unit_get_fn(cu);
                     // Return to previous pointer as current unit.
                     compiler->current_unit = compiler->current_unit->enclosing;
 
                     // adding the closure unit into the constant pool
                     compiler_load_const(compiler, new_fn);
-
                     compiler_write_byte(compiler,I_CLOSURE);
                     for (int i = 0; i < cu->upvalue_count; i++) {
-                        // The upvalues come from OUTSIDE the closure, not INSIDE.
-                        // thus, we write that the current frame has a closure with said
-                        // variables
-                        const Upvalue* up = &compiler->current_unit->upvalues[i];
+                        const Upvalue* up = &cu->upvalues[i];
 #ifdef DEBUG
                         printf("Writing upvalue to runtime islocal=%d index=%d\n", up->is_local, up->index);
 #endif
-                        compiler_write_byte(compiler, up->is_local ? 1 : 0);
-                        compiler_write_byte(compiler, (uint8_t)up->index);
+                        compiler_write_byte(compiler, up->is_local ?  1 : 0);
+                        compiler_write_byte(compiler,(uint8_t)up->index);
                     }
 
                     if (compiler->current_unit->locals_chart->cur_depth > 0) {
@@ -355,7 +354,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, lhs->value.symbol);
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
-                        printf("I_SET_LOCAL %s -> reg %d\n", lhs->value.symbol, reg);
+//                        printf("I_SET_LOCAL %s -> reg %d\n", lhs->value.symbol, reg);
                         even+=1;
                         cur_exp = next;
                     }
@@ -520,8 +519,8 @@ int main(int argc, char **argv) {
                  (fn (cookie ())
                     (let (a 15)
                         (fn (bookie ()) 
-                            (+ a 10))
-                        (bookie)))
+                                (+ a 10))
+                            (bookie)))
                  (cookie)
             );
 

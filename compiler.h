@@ -21,7 +21,7 @@ typedef struct LocalChart {
 } LocalChart;
 
 typedef struct  { 
-    int index;
+    uint8_t index;
     bool is_local;
 } Upvalue;
 
@@ -71,7 +71,7 @@ int compiler_add_const(const Compiler *compiler, const lobj value);
 // emits I_LOAD and adds constant to current unit's compiler pool
 void compiler_load_const(const Compiler* compiler, lobj constant); 
 size_t compiler_leave_scope(Compiler* lc); 
-void compiler_enter_scope(Compiler* lc); 
+void compiler_enter_scope(const Compiler* lc);
 
 int localchart_resolve_symbol(const LocalChart* lc, const char* symbol);
 int localchart_insert(LocalChart *lc, const char* symbol);

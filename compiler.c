@@ -128,10 +128,13 @@ lobj compile_unit_get_fn(const CompileUnit* cu) {
         exit(1);
     };
     //this is reallying ugly lol
-    return into_lobj(vm_function_create(cu->bytes.item, darray_size(cu->bytes),
-                                                          cu->constants.item, darray_size(cu->constants),
-                                                          cu->arity, lobj_str(cu->name),
-                                                          cu->upvalue_count));
+    return into_lobj(vm_function_create(cu->bytes.item,
+                                            darray_size(cu->bytes),
+                                             cu->constants.item,
+                                             darray_size(cu->constants),
+                                             cu->arity,
+                                             lobj_str(cu->name),
+                                             cu->upvalue_count));
 }
 
 
@@ -200,26 +203,26 @@ size_t compiler_leave_scope(Compiler* compiler) {
 
     int removed = 0;
     while(lc->locals.size != 0) {
-        const Local* cur = &(darray_item(lc->locals, darray_size(lc->locals)-1));
+        const Local* cur = &(darray_item(lc->locals, darray_size(lc->locals) - 1));
         if(cur->depth <= lc->cur_depth) break;
-        Local* lcl = &darray_pop(lc->locals);
-        if (lcl->is_captured) {
+        if (cur->is_captured) {
             compiler_write_byte(compiler, I_CLOSE_UPVALUE); 
 #ifdef DEBUG
-        printf("ScopeLeave: I_CLOSE_UPVALUE %s\n", SOLID_STR_TO_C(lcl->name));
+        printf("ScopeLeave: I_CLOSE_UPVALUE %s\n", SOLID_STR_TO_C(cur->name));
 #endif
         } else {
             compiler_write_byte(compiler, I_POP);
 #ifdef DEBUG
-        printf("ScopeLeave: I_POP %s\n", SOLID_STR_TO_C(lcl->name));
+        printf("ScopeLeave: I_POP %s\n", SOLID_STR_TO_C(cur->name));
 #endif
         };
+        &darray_pop(lc->locals);
         removed++;
     }
     printf("leaving scope\n");
     return removed;
 }
-void compiler_enter_scope(Compiler* compiler) {
+void compiler_enter_scope(const Compiler* compiler) {
     compiler->current_unit->locals_chart->cur_depth++;
 }
 

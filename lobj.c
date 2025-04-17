@@ -39,22 +39,21 @@ void vm_string_free(vm_string* s) {
 }
 vm_closure* vm_closure_create(vm_function* fn) {
     vm_closure* closure = ALLOCATE(vm_closure, 1);
+    closure->upvalues_ct=fn->upvalues_count;
+    // pointer to vm_function
+    closure->fn=fn;
 
-    vm_upvalue** upvalues = ALLOCATE(vm_upvalue*, fn->upvalues_count);
+    vm_upvalue** upvalues = ALLOCATE(vm_upvalue*, closure->upvalues_ct);
     // current tracking size
     // zero out closure->upvalues
-    for (int i = 0; i < fn->upvalues_count; i++) {
+    for (int i = 0; i < closure->upvalues_ct; i++) {
         upvalues[i] = NULL;
     }
-
     closure->upvalues = upvalues;
-    closure->upvalues_ct=fn->upvalues_count;
 
     // union tag
     closure->obj.type = OBJ_CLOSURE;
 
-    // pointer to vm_function
-    closure->fn=fn;
     return closure;
 }
 

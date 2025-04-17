@@ -19,6 +19,7 @@ static int apply(VM* vm, vm_closure* obj, int argc) {
     //top of call_stack is now the new function after being called
     vm->call_stack[vm->frame_count] = (CallFrame){ 
         .ip=fn->chunk,
+
         .closure=obj,
         // slots is the constants on the stack which this callframe can use. 
         // we set it to the beginning of where we can use it
@@ -341,14 +342,11 @@ int vm_exec(VM *vm, int flags) {
                 printf("closure upvalue count %d\n", closure->upvalues_ct);
                 for (int i = 0; i < closure->upvalues_ct; i++) {
                     uint8_t isLocal = READ_BYTE();
-                    printf("isLocal %d \n", isLocal);
                     uint8_t index = READ_BYTE();
-                    printf("index %d \n", index);
                     if (isLocal) {
                          closure->upvalues[i] =
                              captureUpvalue(vm,cur_frame->slots + index);
                     } else {
-                        printf("cur_frame->closure %d", cur_frame->closure->upvalues_ct);
 //                        printf("%s\n", SOLID_STR_TO_C(AS_STR(cur_frame->closure->fn->name)->contents));
                         // take upvalues from currently 'executing' function
                         closure->upvalues[i] = cur_frame->closure->upvalues[index];
@@ -397,7 +395,10 @@ int vm_exec(VM *vm, int flags) {
                 uint8_t index = READ_BYTE();
                 *cur_frame->closure->upvalues[index]->location = vm_peek(vm, 0);
             } break;
-            case I_CLOSE_UPVALUE: { 
+            case I_CLOSE_UPVALUE: {
+#ifdef DEBUG
+                printf("I_CLOSE_UPVALUE\n");
+#endif
                 closeUpvalues(vm, vm->stack_top - 1);
                 vm_pop(vm);
             } break;
