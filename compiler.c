@@ -213,10 +213,10 @@ size_t compiler_leave_scope(Compiler* compiler) {
         } else {
             compiler_write_byte(compiler, I_POP);
 #ifdef DEBUG
-        printf("ScopeLeave: I_POP %s\n", SOLID_STR_TO_C(cur->name));
+        //printf("ScopeLeave: I_POP %s\n", SOLID_STR_TO_C(cur->name));
 #endif
         };
-        &darray_pop(lc->locals);
+        darray_pop(lc->locals);
         removed++;
     }
     printf("leaving scope\n");

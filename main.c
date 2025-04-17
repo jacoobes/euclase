@@ -453,24 +453,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
 
                 } else if(symbol[0] == '@')  {
                     const char* ident = symbol+1;
-                    const size_t local_index = localchart_resolve_symbol(compiler->current_unit->locals_chart,ident);
-                    if (local_index != -1) {
-                        SExpr* new_value = sexpr_list_first(rest);
-                        emit(compiler, new_value);
-                        compiler_write_byte(compiler, I_SET_LOCAL);
-                        compiler_write_byte(compiler, local_index);
-                    } else {
-                        const int upvalue_location = resolve_upvalue(compiler->current_unit, symbol);
-                        if (upvalue_location != -1) {
-                            compiler_write_byte(compiler, I_SET_UPVALUE);
-                            compiler_write_byte(compiler, (uint8_t)upvalue_location);
-                        } else {
-                            printf("Could not resolve symbol %s while setting variable\n", ident);
-                            exit(1);
-                        }
-                        //todo: string intern, check for existence
-
-                    }
+                    compiler_bind_localsymbol(compiler, symbol);
                 } else {
                     // if its none of the compiler specials, we assume it's a function call.
                     const int argc = sexpr_list_len(rest);
