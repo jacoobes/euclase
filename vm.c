@@ -41,26 +41,6 @@ static int apply(VM* vm, vm_closure* obj, int argc) {
     return 0;
 }
 
-static int invoke(VM* vm, lobj* obj, int argc) {
-    
-    if (is_closure(obj)) {
-        vm_closure* closure = as_closure(obj);
-        return apply(vm, closure, argc);
-    }
-    if (is_native(obj)) {
-        vm_native* nativeobj = as_native(obj);
-
-        lobj result = nativeobj->native(argc, vm->stack_top-argc);
-
-        vm->stack_top -= argc + 1;
-        vm_push(vm,result);
-        return true;
-    }
-    
-    return 0;
-
-}
-
 static void reset_stack(VM* vm) {
     vm->stack_top = vm->stack;
 }
@@ -76,6 +56,21 @@ lobj WAF_PRINT(int argc, lobj* args) {
     return lobj_num(0);
 }
 
+void vm_def_native(VM* vm, const char* symbol, vm_native* nativeobj) {
+    vm_string* vbs = vm_string_create(symbol);
+    vm_string* interned = table_find_string(vm->strings, &vbs->contents);
+
+    if (interned == NULL) {
+        table_set(vm->strings, vbs, lobj_num(1));
+        interned = vbs;
+    } else {
+        vm_string_free(vbs);
+    }
+    
+    vm_push(vm, into_lobj(interned));
+    vm_push(vm, into_lobj(nativeobj));
+    table_set(vm->globals, AS_STR(vm_pop(vm)), vm_pop(vm));
+}
 
 void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     reset_stack(vm);
@@ -95,12 +90,7 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     vm_closure* main_closure = as_closure(main);
     vm->main_fn=main_closure;
 
-//    solid_str ss = solid_str_new("print");
-//    vm_push(vm, table_find_string(vm->strings, ss, 1)));
-//    vm_push(vm, into_lobj(vm_native_create(1, WAF_PRINT)));
-//    table_set(vm->globals, AS_STR(vm_pop(vm)), vm_pop(vm));
-
-
+    vm_def_native(vm, "print", vm_native_create(1, WAF_PRINT));
 
     if(apply(vm, main_closure, 0) != 0) {
         printf("main fn failed");
@@ -288,20 +278,33 @@ int vm_exec(VM *vm, int flags) {
                 printf("argc %d\n", argc);
                 printf("About to call function "); lobj_println(&maybe_callable);
 #endif
-                if(!is_closure(&maybe_callable)) {
-                    solid_str stack_trace = vm_stacktrace(vm, "Uncallable lobj -> needs closure");
+                int res = 1;
+                if (is_closure(&maybe_callable)) {
+                    vm_closure* closure = as_closure(&maybe_callable);
+
+                    res = apply(vm, closure, argc);
+                    // afterward, the current callstack is set to one less than previous.
+                    cur_frame = &vm->call_stack[vm->frame_count - 1];
+                }
+                else if (is_native(&maybe_callable)) {
+                    vm_native* nativeobj = as_native(&maybe_callable);
+
+                    lobj result = nativeobj->native(argc, vm->stack_top-argc);
+
+                    vm->stack_top -= argc + 1;
+                    vm_push(vm,result);
+                    res = 0;
+                } else {
+                    solid_str stack_trace = vm_stacktrace(vm, "Uncallable lobj -> needs callable object");
                     printf("%s", SOLID_STR_TO_C(stack_trace));
                     return 1;
                 }
-                vm_closure* closure = as_closure(&maybe_callable);
-                // apply: we take the maybe callable
-                if(apply(vm, closure, argc)) { 
+
+                if(res != 0) { 
                     solid_str stack_trace = vm_stacktrace(vm, "Failed to call an lobj");
                     printf("%s", SOLID_STR_TO_C(stack_trace));
                     return 1;
                 }
-                // afterward, the current callstack is set to one less than previous.
-                cur_frame = &vm->call_stack[vm->frame_count - 1];
             } break;
             case I_JMP: {
                 //advance current frame's instruction pointer by two bytes (uint16_t)

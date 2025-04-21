@@ -176,6 +176,9 @@ void lobj_print(lobj* o) {
             case OBJ_UPVALUE: {
                 printf("upvalue");
             }
+            case OBJ_NATIVE: { 
+                printf("<native fn>");
+            } break;
             default: { 
                 printf("obj, yo no se"); 
             } break;

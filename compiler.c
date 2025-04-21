@@ -145,6 +145,9 @@ void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings)
     compiler->globals=globals;
     compiler->strings=strings;
 
+
+    
+
 }
 
 void compiler_destroy(Compiler *compiler) {
