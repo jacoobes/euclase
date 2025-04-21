@@ -77,7 +77,7 @@ int localchart_insert(LocalChart *lc, const char* symbol) {
     return prev_size;
 }
 // name is duplicated, need to manage memory
-CompileUnit* compileunit_create(const char* name, const int arity) {
+CompileUnit* compileunit_create(CompileUnit* enclosing, const char* name, const int arity) {
     LocalChart* lc = malloc(sizeof(LocalChart));
     localchart_init(lc);
     // add function name to the 0th slot in locals
@@ -95,7 +95,7 @@ CompileUnit* compileunit_create(const char* name, const int arity) {
 
     cu->upvalue_count = 0;
 
-    cu->enclosing=NULL;
+    cu->enclosing=enclosing;
     return cu;
 }
 
@@ -140,7 +140,7 @@ lobj compile_unit_get_fn(const CompileUnit* cu) {
 
 void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
     // darray_init(compiler->units);
-    compiler->current_unit= compileunit_create("__main__", 0);
+    compiler->current_unit = compileunit_create(NULL, "__main__", 0);
 
     compiler->globals=globals;
     compiler->strings=strings;
@@ -164,6 +164,8 @@ int compiler_write_byte(const Compiler *compiler, const uint8_t byte) {
 // adds value to current units' compiler pool. Returns the size of array after pushing
 int compiler_add_const(const Compiler *compiler, const lobj value) {
     CompileUnit* cu = compiler->current_unit;
+
+    // if is string, try to find cached string of same hash and contents
     if (IS_STR(value)) {
         vm_string* str = AS_STR(value);
         const vm_string* dupe = table_find_string(compiler->strings, &str->contents, str->hash);
@@ -172,14 +174,14 @@ int compiler_add_const(const Compiler *compiler, const lobj value) {
         if(!dupe) {
             darray_push(cu->constants, value);
             table_set(compiler->strings, str, lobj_num(1));
-            return darray_size(cu->constants);
+            return darray_size(cu->constants)-1;
         }
         darray_push(cu->constants, into_lobj((void*)dupe));
         vm_string_free(str);
-        return darray_size(cu->constants);
+        return darray_size(cu->constants)-1;
     }
     darray_push(cu->constants, value);
-    return darray_size(cu->constants);
+    return darray_size(cu->constants)-1;
 }
 
 // emits I_LOAD and adds constant to current unit's compiler pool
@@ -190,9 +192,18 @@ void compiler_load_const(const Compiler* compiler, lobj constant) {
 #endif
 
 
-    compiler_add_const(compiler, constant);
-    compiler_write_byte(compiler, darray_size(compiler->current_unit->constants) - 1);
+    int size = compiler_add_const(compiler, constant);
+    compiler_write_byte(compiler, size);
 }
+
+
+
+// compiler leave scope. my thought process on 'let blocks' 
+// a let block is a scope, and the last expression is returned 
+// but currently im thinking this is not the case now since if i POP 
+// or CLOSE upvalue for let block scopes maybe for let block scopes it only does compile time stuff -- it won't emit opcodes for i_close or i_pop but when 
+// in lisp this is implemented as a macro. maybe i can do it like that, but i barely have
+// macros
 
 size_t compiler_leave_scope(Compiler* compiler) {
     LocalChart* lc = compiler->current_unit->locals_chart;
@@ -205,6 +216,8 @@ size_t compiler_leave_scope(Compiler* compiler) {
     while(lc->locals.size != 0) {
         const Local* cur = &(darray_item(lc->locals, darray_size(lc->locals) - 1));
         if(cur->depth <= lc->cur_depth) break;
+
+        // if the local was captured by a scope lower, we close it
         if (cur->is_captured) {
             compiler_write_byte(compiler, I_CLOSE_UPVALUE); 
 #ifdef DEBUG
@@ -216,13 +229,36 @@ size_t compiler_leave_scope(Compiler* compiler) {
         //printf("ScopeLeave: I_POP %s\n", SOLID_STR_TO_C(cur->name));
 #endif
         };
+
         darray_pop(lc->locals);
         removed++;
     }
     printf("leaving scope\n");
     return removed;
 }
+
 void compiler_enter_scope(const Compiler* compiler) {
     compiler->current_unit->locals_chart->cur_depth++;
+}
+
+int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruction) {
+    compiler_write_byte(compiler,instruction); //0
+    //short
+    int jmp_instruct_loc = compiler_write_byte(compiler, 0xff); //1 placeholder
+                           compiler_write_byte(compiler, 0xff); //2 placeholder
+    //end short
+    return jmp_instruct_loc;
+}
+
+void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc) {
+    const CompileUnit* cur_unit = compiler->current_unit;
+    cur_unit->bytes.item[ushort_begin] = (jump_loc >> 8) & 0xff;
+    cur_unit->bytes.item[ushort_begin+1] = jump_loc & 0xff;
+}
+
+
+void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_loc) {
+    darray_push(cur_unit->bytes, (jump_loc >> 8) & 0xff );
+    darray_push(cur_unit->bytes, jump_loc & 0xff);
 }
 

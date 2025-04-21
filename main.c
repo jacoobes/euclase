@@ -61,26 +61,6 @@ static inline void emit_bin_op(Compiler* compiler, const enum Instruction op, SE
     compiler_write_byte(compiler, op);
 }
 
-int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruction) {
-    compiler_write_byte(compiler,instruction); //0
-    //short
-    int jmp_instruct_loc = compiler_write_byte(compiler, 0xff); //1 placeholder
-                           compiler_write_byte(compiler, 0xff); //2 placeholder
-    //end short
-    return jmp_instruct_loc;
-}
-
-void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc) {
-    const CompileUnit* cur_unit = compiler->current_unit;
-    cur_unit->bytes.item[ushort_begin] = (jump_loc >> 8) & 0xff;
-    cur_unit->bytes.item[ushort_begin+1] = jump_loc & 0xff;
-}
-
-
-void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_loc) {
-    darray_push(cur_unit->bytes, (jump_loc >> 8) & 0xff );
-    darray_push(cur_unit->bytes, jump_loc & 0xff);
-}
 
 int add_upvalue(CompileUnit* cu, const uint8_t index, const bool is_local ) {
     const int upv_count = cu->upvalue_count;
@@ -150,11 +130,9 @@ void compiler_bind_localsymbol(const Compiler* compiler, char* symbol) {
         arg = str_loc;
 
 #ifdef DEBUG
-        printf("emitting symbol: I_SET_UPVALUE %s, %d\n",symbol, arg); ;
+        printf("emitting symbol: I_SET_GLOBAL %s, %d\n",symbol, arg); ;
 #endif
     }
-    // printf("Could not bind %s\n", symbol);
-    // exit(1);
     compiler_write_byte(compiler, op);
     compiler_write_byte(compiler, (uint8_t)arg);
 
@@ -183,9 +161,9 @@ void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
         // str dupe symbol
         arg = compiler_add_const(compiler, lobj_str(name));
         compiler_write_byte(compiler,I_GET_GLOBAL);
-        compiler_write_byte(compiler, arg-1);
+        compiler_write_byte(compiler, arg);
 #ifdef DEBUG
-        printf("emitting symbol: I_GET_GLOBAL %s, %d\n", name, arg-1); ;
+        printf("emitting symbol: I_GET_GLOBAL %s, %d\n", name, arg); ;
 #endif
     }
 }
@@ -249,8 +227,9 @@ void emit(Compiler* compiler, SExpr *sexpr) {
 
                     // first class functions are just variables in disguise, that's why clojure's
                     // defn is just syntax over def and f
-                    CompileUnit* cu = compileunit_create(fn_name->value.symbol, sexpr_list_len(args) );
-                    cu->enclosing = compiler->current_unit;
+                    CompileUnit* cu = compileunit_create(compiler->current_unit,
+                                                         fn_name->value.symbol,
+                                                         sexpr_list_len(args));
                     compiler->current_unit = cu;
 
 
@@ -285,9 +264,9 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     }
 
                     compiler_write_byte(compiler, I_RETURN);
-
+                    compiler_leave_scope(compiler);
                     // END WRITING TO NEW FUNCTION
-
+                    //
                     const lobj new_fn = compile_unit_get_fn(cu);
                     // Return to previous pointer as current unit.
                     compiler->current_unit = compiler->current_unit->enclosing;
@@ -295,6 +274,8 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // adding the closure unit into the constant pool
                     compiler_load_const(compiler, new_fn);
                     compiler_write_byte(compiler,I_CLOSURE);
+
+                    // writing upvalue information from new function to its enclosing function
                     for (int i = 0; i < cu->upvalue_count; i++) {
                         const Upvalue* up = &cu->upvalues[i];
 #ifdef DEBUG
@@ -304,8 +285,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_write_byte(compiler,(uint8_t)up->index);
                     }
 
-                    if (compiler->current_unit->locals_chart->cur_depth > 0) {
-                        printf("Setting local\n");
+                    if (compiler->current_unit->enclosing != NULL) {
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
                         if (reg == -1) {
                             fprintf(stderr,"function already declared\n");
@@ -314,12 +294,9 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
                     } else {
-                        // printf("Setting global\n");
                         const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
                         compiler_write_byte(compiler, I_SET_GLOBAL);
-                        // why the offset -1? because when we insert with compiler_add_const,
-                        // it returns size after insert. thus, we need to write byte of str_loc - 1 to get location of string
-                        compiler_write_byte(compiler, str_loc-1);
+                        compiler_write_byte(compiler, str_loc);
                     }
                 }
                 else if(strcmp(symbol, "+") == 0)  { emit_bin_op(compiler, I_ADD, rest); }
@@ -354,7 +331,6 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         const int reg = localchart_insert(compiler->current_unit->locals_chart, lhs->value.symbol);
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
-//                        printf("I_SET_LOCAL %s -> reg %d\n", lhs->value.symbol, reg);
                         even+=1;
                         cur_exp = next;
                     }
@@ -363,6 +339,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     sexpr_list_foreach(b_form, let_body) {
                         emit(compiler, sexpr_list_first(b_form));
                     }
+
                     compiler_leave_scope(compiler);
 
                 } else if (strcmp(symbol, "var") == 0) { //global variable
@@ -382,7 +359,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
 
                     const int str_loc = compiler_add_const(compiler, lobj_str(varname->value.symbol));
                     compiler_write_byte(compiler, I_SET_GLOBAL);
-                    compiler_write_byte(compiler, str_loc - 1);
+                    compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
 
                     #define BYTE_LEN \
@@ -500,18 +477,24 @@ int main(int argc, char **argv) {
 //          char *buffer = read_file(filename, &size_read);
             const char* fib = QUOTE(
                  (fn (cookie ())
-                    (let (a 15)
+                    (let (a 6) 
                         (fn (bookie ()) 
                                 (+ a 10))
-                            (bookie)))
+
+                        (bookie)))
                  (cookie)
+
             );
 
-            const char* global_vars = "(var a 5)\n"
-                                            "(+ a (+ 120 1))\n";
+            const char* global_vars = QUOTE( 
+                (var a 5)
+                (+ a (+ 120 1))
+            );
 
-            const char* looper = "(let (a 10) "
-                                    "(while a (@a (- a 1))))";
+            const char* looper = QUOTE( 
+                (let (a 10) 
+                    (while a (@a (- a 1))));
+            );
 
             printf("program:\n '%s'\n", fib);
             size_t count;

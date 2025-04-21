@@ -3,6 +3,7 @@
 
 #include "table.h"
 #include "lobj.h"
+#include "vm.h"
 
 #define UINT8_COUNT (UINT8_MAX + 1)
 
@@ -41,7 +42,7 @@ typedef struct CompileUnit {
 } CompileUnit;
 
 // name is duplicated, need to manage memory
-CompileUnit* compileunit_create(const char* name, const int arity); 
+CompileUnit* compileunit_create(CompileUnit* enclosing, const char* name, const int arity); 
 void compileunit_free(CompileUnit* cu); 
 lobj compile_unit_get_closure(CompileUnit* cu); 
 // a compile unit is transformed into a lobj of type OBJ with CLOSURE via copy
@@ -73,8 +74,12 @@ void compiler_load_const(const Compiler* compiler, lobj constant);
 size_t compiler_leave_scope(Compiler* lc); 
 void compiler_enter_scope(const Compiler* lc);
 
+int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruction);
+
 int localchart_resolve_symbol(const LocalChart* lc, const char* symbol);
 int localchart_insert(LocalChart *lc, const char* symbol);
 
+void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc);
+void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_loc);
 #endif
 
