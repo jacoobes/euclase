@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
-    uint32_t index = k->hash % capacity; 
+    uint32_t index = k->contents.hash % capacity; 
     //no infinite loop here since we will never fill the entire array with our TABLE_MAX_LOAD (load factor)
     TableEntry* tombstone = NULL;
     for(;;) {
@@ -105,10 +105,10 @@ void table_create(HashTable* tbl) {
     tbl->entries=NULL;
 }
 
-vm_string* table_find_string(HashTable* table, const solid_str* ss, uint32_t hash) {
+vm_string* table_find_string(HashTable* table, const solid_str* ss) {
   if (table->count == 0) return NULL;
 
-  uint32_t index = hash % table->capacity;
+  uint32_t index = ss->hash % table->capacity;
   for (;;) {
     TableEntry* entry = &table->entries[index];
     if (entry->key == NULL) {
@@ -117,7 +117,7 @@ vm_string* table_find_string(HashTable* table, const solid_str* ss, uint32_t has
             return NULL;
       }
       //printf("null key\n");
-    } else if ((solid_strcmp(ss, &entry->key->contents) == 0) && entry->key->hash == hash) {
+    } else if ((solid_strcmp(ss, &entry->key->contents) == 0) && entry->key->contents.hash == ss->hash) {
       // We found it.
       return entry->key;
     } else {

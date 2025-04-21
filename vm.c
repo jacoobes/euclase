@@ -5,6 +5,17 @@
 #include "./vm.h"
 
 
+void vm_push(VM *vm, lobj value) {
+    *vm->stack_top = value;
+    vm->stack_top++;
+}
+
+lobj vm_pop(VM *vm) {
+    vm->stack_top--;
+    // get the element at top of stack.
+    return *vm->stack_top;
+}
+
 static int apply(VM* vm, vm_closure* obj, int argc) {
     vm_function* fn = obj->fn;
     if(fn->arity != argc) {
@@ -30,24 +41,41 @@ static int apply(VM* vm, vm_closure* obj, int argc) {
     return 0;
 }
 
+static int invoke(VM* vm, lobj* obj, int argc) {
+    
+    if (is_closure(obj)) {
+        vm_closure* closure = as_closure(obj);
+        return apply(vm, closure, argc);
+    }
+    if (is_native(obj)) {
+        vm_native* nativeobj = as_native(obj);
+
+        lobj result = nativeobj->native(argc, vm->stack_top-argc);
+
+        vm->stack_top -= argc + 1;
+        vm_push(vm,result);
+        return true;
+    }
+    
+    return 0;
+
+}
 
 static void reset_stack(VM* vm) {
     vm->stack_top = vm->stack;
 }
-void vm_push(VM *vm, lobj value) {
-    *vm->stack_top = value;
-    vm->stack_top++;
-}
 
-lobj vm_pop(VM *vm) {
-    vm->stack_top--;
-    // get the element at top of stack.
-    return *vm->stack_top;
-}
 
 lobj vm_peek(const VM* vm, const int distance) {
     return vm->stack_top[-1 - distance];
 }
+
+
+lobj WAF_PRINT(int argc, lobj* args) {
+    lobj_println(args);
+    return lobj_num(0);
+}
+
 
 void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     reset_stack(vm);
@@ -57,12 +85,23 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     vm->globals = globals;
     vm->strings = strings;
 
+
+    
+
     if(!is_closure(main)) {
         fprintf(stderr, "Main is not callable, got %d\n", main->type);
         exit(1);
     }
     vm_closure* main_closure = as_closure(main);
     vm->main_fn=main_closure;
+
+//    solid_str ss = solid_str_new("print");
+//    vm_push(vm, table_find_string(vm->strings, ss, 1)));
+//    vm_push(vm, into_lobj(vm_native_create(1, WAF_PRINT)));
+//    table_set(vm->globals, AS_STR(vm_pop(vm)), vm_pop(vm));
+
+
+
     if(apply(vm, main_closure, 0) != 0) {
         printf("main fn failed");
     }
@@ -360,10 +399,11 @@ int vm_exec(VM *vm, int flags) {
 #ifdef DEBUG
                 printf("GET GLOBAL "); printf("%s\n", SOLID_STR_TO_C(name->contents));
 #endif
-//                table_print(vm->globals);
+                table_print(vm->globals);
+                table_print(vm->strings);
                 lobj v;
                 if(!table_get(vm->globals, name, &v)) {
-                    printf("variable %s not found", SOLID_STR_TO_C(name->contents));
+                    printf("variable '%s' not found", SOLID_STR_TO_C(name->contents));
                     //variable not found
                     return 1;
                 }

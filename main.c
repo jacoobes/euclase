@@ -185,7 +185,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
         break;
         case SEXPR_STRING: {
             vm_string* str = vm_string_create(cur->value.string);
-            const vm_string* dupe = table_find_string(compiler->strings, &str->contents, str->hash);
+            const vm_string* dupe = table_find_string(compiler->strings, &str->contents);
             // if dupe doesn't exist (it's new)
             if(!dupe) {
                 compiler_load_const(compiler, into_lobj(str));
@@ -476,13 +476,7 @@ int main(int argc, char **argv) {
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
             const char* fib = QUOTE(
-                 (fn (cookie ())
-                    (let (a 6) 
-                        (fn (bookie ()) 
-                                (+ a 10))
-
-                        (bookie)))
-                 (cookie)
+                (print (+ 2 2)) 
 
             );
 

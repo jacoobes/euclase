@@ -8,6 +8,7 @@
 typedef struct {
     int length;
     darray_char vec;
+    unsigned long hash;
 } solid_str;
 
 

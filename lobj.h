@@ -9,7 +9,15 @@
 
 typedef enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_OBJ } LVAL;
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
-typedef enum { OBJ_CLOSURE, OBJ_STR, OBJ_FUNC, OBJ_UPVALUE, OBJ_USR } LOBJ_TYPE;
+typedef enum {
+    OBJ_CLOSURE,
+    OBJ_STR,
+    OBJ_FUNC,
+    OBJ_UPVALUE,
+    OBJ_NATIVE,
+    OBJ_USR 
+} LOBJ_TYPE;
+
 
 // the base object class
 typedef struct {
@@ -31,6 +39,7 @@ typedef struct {
 } lobj; //lisp object
 
 
+typedef lobj (*native_func)(int argc, lobj* args);
 
 typedef struct {
     vm_object obj;
@@ -49,7 +58,6 @@ typedef struct {
 //immutable wrapper for solid_str which extends a vm_obj
 typedef struct {
     vm_object obj;
-    unsigned long hash;
     solid_str contents;
 } vm_string;
 
@@ -68,6 +76,13 @@ typedef struct {
     vm_function* fn;
 } vm_closure;
 
+
+typedef struct {
+    vm_object obj;
+    int argc;
+    native_func native;
+} vm_native;
+
 #define IS_NUM(obj) ((obj).type == LVAL_NUM)
 #define IS_OBJ(obj) ((obj).type == LVAL_OBJ)
 #define IS_FUNC(obj) (IS_OBJ((obj)) && (obj).v.obj->type == OBJ_FUNC)
@@ -76,7 +91,6 @@ typedef struct {
 #define AS_STR(obj_) ((vm_string*)(obj_).v.obj)
 #define AS_FUNC(obj_) ((vm_function*)(obj_).v.obj)
 #define AS_NUM(obj_) ((obj_).v.num)
-#define OBJ_VAL(obj_) ((lobj){ .type=LVAL_OBJ, .v.obj=(vm_object*)(obj_) })
 
 static inline bool is_closure(lobj* lval) {
     return (lval->type == LVAL_OBJ)  && (lval->v.obj->type == OBJ_CLOSURE);
@@ -84,6 +98,16 @@ static inline bool is_closure(lobj* lval) {
 static inline vm_closure* as_closure(lobj* lval) {
     return (vm_closure*)lval->v.obj;
 }
+
+static inline bool is_native(lobj* lval) {
+    return (lval->type == LVAL_OBJ) && (lval->v.obj->type == OBJ_NATIVE);
+}
+
+static inline vm_native* as_native(lobj* lval ) {
+    return (vm_native*)lval->v.obj;
+}
+
+
 static inline bool is_str(lobj* lval) {
     return lval->type == LVAL_OBJ && lval->v.obj->type == OBJ_STR;
 }
@@ -109,16 +133,19 @@ vm_function* vm_function_create(uint8_t* initial_code,
                                 uint8_t arity,
                                 lobj name,
                                 int upvalues_count);
+vm_native* vm_native_create(
+    int argc,
+    native_func fn
+);
 
 vm_closure* vm_closure_create(vm_function* fn);
 vm_string* vm_string_create(const char* contents);
 void vm_string_free(vm_string* s);
 vm_upvalue* vm_upvalue_create(lobj* location);
 
+
 lobj lobj_str(const char *);
-
 lobj lobj_num(double x);
-
 lobj lobj_err(int err);
 void lobj_free(lobj*);
 void lobj_print(lobj*);

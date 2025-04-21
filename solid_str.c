@@ -1,14 +1,25 @@
 #include "solid_str.h"
 #include <stdio.h>
 
+static uint32_t hash(const char* key, int length) {
+  uint32_t hash = 2166136261u;
+  for (int i = 0; i < length; i++) {
+    hash ^= (uint8_t)key[i];
+    hash *= 16777619;
+  }
+  return hash;
+}
 
 solid_str solid_str_new(const char* startbuf) {
     darray_char s = darray_new();
     if(startbuf == NULL) {
-        return (solid_str){.length=0,  .vec=s };
+        unsigned long ha = hash(startbuf, 0);
+        return (solid_str){.length=0,  .vec=s, .hash=ha };
     } else {
-        darray_append_items_nullterminate(s, startbuf, strlen(startbuf));
-        return (solid_str){ .length=strlen(startbuf), .vec=s };
+        int len = strlen(startbuf);
+        unsigned long ha = hash(startbuf, len);
+        darray_append_items_nullterminate(s, startbuf, len);
+        return (solid_str){ .length=len, .vec=s, .hash=ha };
     }
 }
 

@@ -4,30 +4,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-//djb2
-unsigned long
-hash(const unsigned char *str)
-{
-    unsigned long hash = 5381;
-    int c;
 
-    while ((c = *str++))
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-
-    return hash;
-}
 
 vm_upvalue* vm_upvalue_create(lobj* ref) {
     vm_upvalue *up = ALLOCATE(vm_upvalue, 1);
     up->location = ref;
     up->obj.type = OBJ_UPVALUE;
-    up->closed = lobj_num(0);
+    up->closed = lobj_num(false);
     up->next=NULL;
     return up;
 }
 vm_string* vm_string_create(const char* contents) {
     vm_string* s = malloc(sizeof(vm_string));
-    s->hash= hash(contents);
     s->obj.type=OBJ_STR;
     s->contents=solid_str_new(contents);
     return s;
@@ -55,6 +43,15 @@ vm_closure* vm_closure_create(vm_function* fn) {
     closure->obj.type = OBJ_CLOSURE;
 
     return closure;
+}
+
+
+vm_native* vm_native_create(int argc, native_func fn) {
+    vm_native* nativeobj = ALLOCATE(vm_native, 1);
+    nativeobj->argc=argc;
+    nativeobj->native=fn;
+    nativeobj->obj.type = OBJ_NATIVE;
+    return nativeobj;
 }
 
 // NOTE: contents MUST BE NULL TERMINATED

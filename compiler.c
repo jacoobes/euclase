@@ -168,7 +168,7 @@ int compiler_add_const(const Compiler *compiler, const lobj value) {
     // if is string, try to find cached string of same hash and contents
     if (IS_STR(value)) {
         vm_string* str = AS_STR(value);
-        const vm_string* dupe = table_find_string(compiler->strings, &str->contents, str->hash);
+        const vm_string* dupe = table_find_string(compiler->strings, &str->contents);
 
         // if dupe doesn't exist (it's new)
         if(!dupe) {
