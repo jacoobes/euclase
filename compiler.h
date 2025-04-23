@@ -2,7 +2,6 @@
 #define compiler_h
 
 #include "table.h"
-#include "lobj.h"
 #include "vm.h"
 
 #define UINT8_COUNT (UINT8_MAX + 1)

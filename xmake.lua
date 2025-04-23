@@ -3,15 +3,16 @@ add_rules("mode.debug", "mode.release")
 target("solid-waffle")
     set_kind("static")
     add_files("solid_str.c")
-    add_files("lobj.c")
-    add_files("memory.c")
+    add_files("gc.c")
     add_files("table.c")
+    add_files("memory.c")
     add_files('reader.c')
     add_files("vm.c")
     if is_plat("linux", "macosx") then
          add_syslinks("readline")
     end
-    add_defines("DEBUG")
+
+
 
 target("main")
     set_kind("binary")
@@ -19,7 +20,10 @@ target("main")
     add_files("main.c")
     set_languages("c11")
     add_deps("solid-waffle")
+    add_defines("DEBUG_STRESS_GC")
+    add_defines("DEBUG_LOG_GC")
     add_defines("DEBUG")
+    add_defines("DEBUG_COMPILER")
 
 
 target('asm')

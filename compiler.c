@@ -129,12 +129,12 @@ lobj compile_unit_get_fn(const CompileUnit* cu) {
     };
     //this is reallying ugly lol
     return into_lobj(vm_function_create(cu->bytes.item,
-                                            darray_size(cu->bytes),
-                                             cu->constants.item,
-                                             darray_size(cu->constants),
-                                             cu->arity,
-                                             lobj_str(cu->name),
-                                             cu->upvalue_count));
+                                        darray_size(cu->bytes),
+                                        cu->constants.item,
+                                        darray_size(cu->constants),
+                                        cu->arity,
+                                        lobj_str(cu->name),
+                                        cu->upvalue_count));
 }
 
 
@@ -144,9 +144,6 @@ void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings)
 
     compiler->globals=globals;
     compiler->strings=strings;
-
-
-    
 
 }
 
@@ -190,7 +187,7 @@ int compiler_add_const(const Compiler *compiler, const lobj value) {
 // emits I_LOAD and adds constant to current unit's compiler pool
 void compiler_load_const(const Compiler* compiler, lobj constant) {
     compiler_write_byte(compiler, I_LOAD);
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
     printf("I_LOAD "); lobj_print(&constant); printf(" to %s\n", compiler->current_unit->name);
 #endif
 
@@ -223,12 +220,12 @@ size_t compiler_leave_scope(Compiler* compiler) {
         // if the local was captured by a scope lower, we close it
         if (cur->is_captured) {
             compiler_write_byte(compiler, I_CLOSE_UPVALUE); 
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
         printf("ScopeLeave: I_CLOSE_UPVALUE %s\n", SOLID_STR_TO_C(cur->name));
 #endif
         } else {
             compiler_write_byte(compiler, I_POP);
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
         //printf("ScopeLeave: I_POP %s\n", SOLID_STR_TO_C(cur->name));
 #endif
         };
@@ -236,7 +233,9 @@ size_t compiler_leave_scope(Compiler* compiler) {
         darray_pop(lc->locals);
         removed++;
     }
+#ifdef DEBUG_COMPILER
     printf("leaving scope\n");
+#endif
     return removed;
 }
 

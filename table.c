@@ -1,8 +1,7 @@
 #include "./table.h"
-#include "./memory.h"
-#include "lobj.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "memory.h"
 
 static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
     uint32_t index = k->contents.hash % capacity; 
@@ -27,7 +26,7 @@ static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
 
 //misnomer= we create a new array, freeing the old one and deleting it
 static void adjust_capacity (HashTable* tbl, int capacity) {
-    TableEntry* new_entries = ALLOCATE(TableEntry, capacity);
+    TableEntry* new_entries = calloc(sizeof(TableEntry), capacity);
     for(int i = 0; i < capacity; i++) {
         new_entries[i].key = NULL;
         new_entries[i].value = lobj_num(TABLE_TOMBSTONE);
@@ -113,7 +112,7 @@ vm_string* table_find_string(HashTable* table, const solid_str* ss) {
     TableEntry* entry = &table->entries[index];
     if (entry->key == NULL) {
       if(AS_NUM(entry->value) == TABLE_TOMBSTONE) { 
-            printf("tombstone");
+            //printf("tombstone");
             return NULL;
       }
       //printf("null key\n");
@@ -146,4 +145,10 @@ void table_print(HashTable* table) {
         }
     }
 }
-
+void mark_table(HashTable* table) {
+    for (int i = 0; i < table->capacity; i++) {
+        TableEntry* entry = &table->entries[i];
+        mark_object((vm_object*)entry->key);
+        mark_value(entry->value);
+  }
+}

@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include "./vm.h"
 #include "./darray.h"
-#include "lobj.h"
 
 typedef struct {
     char* name;

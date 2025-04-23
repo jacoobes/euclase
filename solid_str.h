@@ -24,5 +24,6 @@ void solid_str_appends(solid_str* s, char* cs);
 char solid_str_at(solid_str* s, int idx);
 int solid_strcmp(const solid_str* s1, const solid_str* s2);
 solid_str solid_str_subs(solid_str* s1, int start, int end);
+uint32_t hash_str(const char* key, int length);
 
 #endif

@@ -1,10 +1,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "./vm.h"
-#include "lobj.h"
 #include <string.h>
 #include <stdbool.h>
+#include "vm.h"
 #include "reader.h"
 #include "compiler.h"
 #include "darray.h"  
@@ -85,14 +84,18 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
     // resolving where the upvalue is.
     // we also know that we checked local symbols already.
     if (cu->enclosing == NULL) {
+#ifdef DEBUG_COMPILER
         printf("UpvalueResolution: '%s' no upper scope found. yielding -1\n", symbol);
+#endif
         return -1;
     }
     //printf("resolving %s in %s\n", symbol, cu->name);
     const LocalChart* enclosing_localchart = cu->enclosing->locals_chart;
     const int result = localchart_resolve_symbol(enclosing_localchart, symbol);
     if (result != -1) { // if it is not a local
+#ifdef DEBUG_COMPILER
         printf("UpvalueResolution: Found local '%s' in enclosing local chart.\n", symbol);
+#endif
         Local* captured_local = &(darray_item(enclosing_localchart->locals, result));
         captured_local->is_captured = true;
         return add_upvalue(cu, (uint8_t)result, true);
@@ -100,11 +103,14 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
 
     const int res = resolve_upvalue(cu->enclosing, symbol); // recursively check enclosing compile unit
     if (res != -1) {
+#ifdef DEBUG_COMPILER
         printf("UpvalueResolution: Recursively resolved upvalue '%s'\n", symbol);
+#endif
         return add_upvalue(cu, (uint8_t)res, false);
     }
-
+#ifdef DEBUG
     printf("UpvalueResolution: could not resolve an upvalue\n");
+#endif
     return -1;
 }
 
@@ -116,12 +122,12 @@ void compiler_bind_localsymbol(const Compiler* compiler, char* symbol) {
     int arg = localchart_resolve_symbol(lc, symbol);
     if (arg != -1) {
         op = I_SET_LOCAL;
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
         printf("emitting symbol: I_SET_LOCAL %s, %d\n",symbol, arg); ;
 #endif
     } else if ((arg = resolve_upvalue(compiler->current_unit, symbol)) != -1) {
         op = I_SET_UPVALUE;
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
         printf("emitting symbol: I_SET_UPVALUE %s, %d\n",symbol, arg); ;
 #endif
     } else {
@@ -129,7 +135,7 @@ void compiler_bind_localsymbol(const Compiler* compiler, char* symbol) {
         op = I_SET_GLOBAL;
         arg = str_loc;
 
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
         printf("emitting symbol: I_SET_GLOBAL %s, %d\n",symbol, arg); ;
 #endif
     }
@@ -144,7 +150,7 @@ void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
     int arg = localchart_resolve_symbol(lc, name);
     //if local was found
     if (arg != -1) {
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
         printf("emitting symbol: I_GET_LOCAL %s, %d\n", name, arg); ;
 #endif
         compiler_write_byte(compiler,  I_GET_LOCAL);
@@ -153,7 +159,7 @@ void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
     else if ((arg = resolve_upvalue(compiler->current_unit, name)) != -1) {
         compiler_write_byte(compiler,  I_GET_UPVALUE);
         compiler_write_byte(compiler,  arg);
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
         printf("emitting symbol: I_GET_UPVALUE %s, %d\n", name, arg); ;
 #endif
     }
@@ -162,7 +168,7 @@ void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
         arg = compiler_add_const(compiler, lobj_str(name));
         compiler_write_byte(compiler,I_GET_GLOBAL);
         compiler_write_byte(compiler, arg);
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
         printf("emitting symbol: I_GET_GLOBAL %s, %d\n", name, arg); ;
 #endif
     }
@@ -174,7 +180,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
     switch (cur->type) {
         case SEXPR_NUMBER: {
             lobj snum = lobj_num(cur->value.number);
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
             printf("emitting number: I_LOAD "); lobj_println(&snum);
 #endif
             compiler_load_const(compiler, snum);
@@ -220,7 +226,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         printf("fnname must be a simple symbol\n");
                         exit(1);
                     }
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
                     printf("emitting fn: '%s'\n", fn_name->value.symbol);
 #endif
                     // BEGIN WRITING TO NEW FUNCTION
@@ -278,7 +284,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // writing upvalue information from new function to its enclosing function
                     for (int i = 0; i < cu->upvalue_count; i++) {
                         const Upvalue* up = &cu->upvalues[i];
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
                         printf("Writing upvalue to runtime islocal=%d index=%d\n", up->is_local, up->index);
 #endif
                         compiler_write_byte(compiler, up->is_local ?  1 : 0);
@@ -451,7 +457,7 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                     // need to emit I_CALL N where N is number of args
                     compiler_write_byte(compiler, I_CALL);
                     compiler_write_byte(compiler, argc);
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
                     printf("emitting: I_CALL %d for %s\n", argc, symbol);
 #endif
                 }
@@ -475,9 +481,18 @@ int main(int argc, char **argv) {
 //          const char *filename = argv[2];
 //          size_t size_read;
 //          char *buffer = read_file(filename, &size_read);
-            const char* fib = QUOTE(
-                (print (+ 2 2)) 
+//
+            const char* fib = QUOTE( 
+                (fn (cookie (a))
+                    (fn (brownie (b))
+                       (+ a b)))
+                (var s (cookie 20))
 
+                (print (s 20))
+            );
+
+            const char* natives = QUOTE(
+                (print (+ 2 2)) 
             );
 
             const char* global_vars = QUOTE( 
@@ -563,7 +578,7 @@ int main(int argc, char **argv) {
 
 
             lobj main = compile_unit_get_closure(main_fn);
-#ifdef DEBUG
+#ifdef DEBUG_COMPILER
             uint8_t* b;
             darray_foreach(b, main_fn->bytes) {
                 printf("%d ", *b);

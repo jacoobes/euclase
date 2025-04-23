@@ -1,22 +1,24 @@
-#include "lobj.h"
 #include "memory.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+void vm_object_init(vm_object* vmobj, LOBJ_TYPE lty) {
+   vmobj->is_marked=false; 
+   vmobj->type=lty;
+}
 
-
-vm_upvalue* vm_upvalue_create(lobj* ref) {
-    vm_upvalue *up = ALLOCATE(vm_upvalue, 1);
+vm_upvalue* vm_upvalue_create(VM* vm, lobj* ref) {
+    vm_upvalue *up = ALLOCATE(vm, vm_upvalue, 1);
     up->location = ref;
-    up->obj.type = OBJ_UPVALUE;
+    vm_object_init(&up->obj, OBJ_UPVALUE);
     up->closed = lobj_num(false);
     up->next=NULL;
     return up;
 }
-vm_string* vm_string_create(const char* contents) {
-    vm_string* s = malloc(sizeof(vm_string));
-    s->obj.type=OBJ_STR;
+vm_string* vm_string_create(VM* vm, const char* contents) {
+    vm_string* s = ALLOCATE(vm, vm_string, 1);
+    vm_object_init(&s->obj, OBJ_STR);
     s->contents=solid_str_new(contents);
     return s;
 }
@@ -25,13 +27,14 @@ void vm_string_free(vm_string* s) {
     free(s);
 
 }
-vm_closure* vm_closure_create(vm_function* fn) {
-    vm_closure* closure = ALLOCATE(vm_closure, 1);
+vm_closure* vm_closure_create(VM* vm, vm_function* fn) {
+    vm_closure* closure = ALLOCATE(vm, vm_closure, 1);
+    vm_object_init(&closure->obj, OBJ_CLOSURE);
     closure->upvalues_ct=fn->upvalues_count;
     // pointer to vm_function
     closure->fn=fn;
 
-    vm_upvalue** upvalues = ALLOCATE(vm_upvalue*, closure->upvalues_ct);
+    vm_upvalue** upvalues = ALLOCATE(vm, vm_upvalue*, closure->upvalues_ct);
     // current tracking size
     // zero out closure->upvalues
     for (int i = 0; i < closure->upvalues_ct; i++) {
@@ -39,18 +42,16 @@ vm_closure* vm_closure_create(vm_function* fn) {
     }
     closure->upvalues = upvalues;
 
-    // union tag
-    closure->obj.type = OBJ_CLOSURE;
-
     return closure;
 }
 
 
-vm_native* vm_native_create(int argc, native_func fn) {
-    vm_native* nativeobj = ALLOCATE(vm_native, 1);
+vm_native* vm_native_create(VM* vm, int argc, native_func fn) {
+    vm_native* nativeobj = ALLOCATE(vm, vm_native, 1);
+    vm_object_init(&nativeobj->obj, OBJ_NATIVE);
+
     nativeobj->argc=argc;
     nativeobj->native=fn;
-    nativeobj->obj.type = OBJ_NATIVE;
     return nativeobj;
 }
 
@@ -58,6 +59,8 @@ vm_native* vm_native_create(int argc, native_func fn) {
 lobj lobj_str(const char* contents) {
     // solid string is heap allocated
     vm_string* s = vm_string_create(contents);
+    
+
     return (lobj) {
         .type=LVAL_OBJ,
         .v.obj=(vm_object*)s
@@ -67,6 +70,7 @@ lobj lobj_str(const char* contents) {
 /* Create a new number type lval */
 
 vm_function* vm_function_create(
+    VM* vm,
     uint8_t* initial_code,
     const uint8_t code_ct,
     lobj* values,
@@ -76,14 +80,14 @@ vm_function* vm_function_create(
     const int upvalues_count
 ) {
    vm_function* fn = malloc(sizeof (vm_function));
-                   fn->obj.type=OBJ_FUNC;
-                   fn->chunk=initial_code;
-                   fn->chunk_ct=code_ct;
-                   fn->values=values;
-                   fn->values_ct=values_count;
-                   fn->arity=arity;
-                   fn->name=name;
-                   fn->upvalues_count = upvalues_count;
+   vm_object_init(&fn->obj, OBJ_FUNC);
+   fn->chunk=initial_code;
+   fn->chunk_ct=code_ct;
+   fn->values=values;
+   fn->values_ct=values_count;
+   fn->arity=arity;
+   fn->name=name;
+   fn->upvalues_count = upvalues_count;
    return fn;
 }
 

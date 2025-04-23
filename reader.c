@@ -35,7 +35,7 @@ char skip_whitespace(const char *input, int *pos) {
 }
 
 SExpr* sexpr_number_create(double num) {
-    SExpr *expr = ALLOCATE(SExpr, 1);
+    SExpr *expr = ALLOC_SEXPR();
     expr->type = SEXPR_NUMBER;
     expr->value.number = num;
     return expr;
@@ -67,7 +67,7 @@ SExpr *read_symbol(const char *input, int *pos) {
         symbol[i++] = c;
         c = next(input,pos);
     }
-    SExpr *expr = ALLOCATE(SExpr, 1);
+    SExpr *expr = ALLOC_SEXPR();
     if (strcmp(symbol, "true") == 0) {
         expr->type = SEXPR_NUMBER;
         expr->value.number = 1;
@@ -120,7 +120,7 @@ SExpr *read_string(const char *input, int *pos) {
         c = input[++(*pos)];
     }
     (*pos)++; // skip '"'
-    SExpr *expr = ALLOCATE(SExpr, 1);
+    SExpr *expr = ALLOC_SEXPR();
     expr->type = SEXPR_STRING;
     // string is heap allocated
     expr->value.string = str;
@@ -147,7 +147,7 @@ SExpr *read_atom(const char *input, int *pos) {
     exit(1);
 }
 SExpr*  sexpr_list_create() {
-    SExpr* head = ALLOCATE(SExpr, 1);
+    SExpr* head = ALLOC_SEXPR();
     head->type = SEXPR_LIST;
     head->value.cons.first = NULL;
     head->value.cons.rest = NULL;

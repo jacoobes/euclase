@@ -1,7 +1,9 @@
 #ifndef table_h
 #define table_h
 
-#include "lobj.h"
+#include "solid_str.h"
+#include "vm.h"
+
 #define MAX(x, y)           (((x) > (y)) ?  (x) : (y))
 
 
@@ -29,6 +31,6 @@ int table_delete(const HashTable* tbl, vm_string*);
 void table_free(HashTable* table);
 vm_string* table_find_string(HashTable* table, const solid_str* ss);
 void table_print(HashTable* table);
-
+void mark_table(HashTable* table);
 
 #endif

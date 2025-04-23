@@ -8,6 +8,9 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#define ALLOC_SEXPR() \
+    malloc((sizeof(SExpr)))
+
 typedef enum {
     SEXPR_NUMBER,
     SEXPR_SYMBOL,
@@ -184,5 +187,8 @@ void print_sexpr(SExpr *expr);
  *             NULL, the function does nothing.
  */
 void free_sexpr(SExpr *expr);
+
+
+
 
 #endif // READER_H

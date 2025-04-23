@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "asm.h"
-#include "memory.h"
+#include "table.h"
 #include "reader.h"
 #include "vm.h"
 
@@ -20,7 +20,7 @@ static void label_init(Label* l, char* name, int arity) {
     l->address=l->count;
 }
 static void labels_write(Assembler* assembler, char* name, int arity) {
-    Label* l = ALLOCATE(Label, 1);
+    Label* l = malloc(sizeof(Label) * 1);
     label_init(l, name, arity);
     assembler->current_label = l;
     //printf("setting current label to %s\n", name);
@@ -138,7 +138,7 @@ int asm_compile(Assembler* a, const char* source) {
             continue;
         }
 #if DEBUG
-        printf("token: %s, len: %llu\n", token, strlen(token));
+        printf("token: %s, len: %zu\n", token, strlen(token));
 #endif
         // Parse instruction
         if (strcmp(token, "HALT") == 0) {
