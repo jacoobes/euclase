@@ -12,7 +12,7 @@ void gc_init() {
 void gc_add_obj(vm_object* obj) {
 
 #ifdef DEBUG_LOG_GC
-    printf("[GC] Allocated %zu bytes for %s (%p)\n", size, tag, ptr);
+    //printf("[GC] Allocated %zu bytes for %s (%p)\n", obj, tag, ptr);
 #endif
 
     if (obj == NULL) {
@@ -33,7 +33,7 @@ void gc_add_obj(vm_object* obj) {
 void gc_collect() {
 
 #ifdef DEBUG_LOG_GC
-    printf("[GC] Collection complete. Freed %zu objects.\n", freed);
+    //printf("[GC] Collection complete. Freed %zu objects.\n", freed);
 #endif
 }
 

@@ -104,10 +104,10 @@ void table_create(HashTable* tbl) {
     tbl->entries=NULL;
 }
 
-vm_string* table_find_string(HashTable* table, const solid_str* ss) {
+vm_string* table_find_string(HashTable* table, const char* ss, uint32_t hash) {
   if (table->count == 0) return NULL;
 
-  uint32_t index = ss->hash % table->capacity;
+  uint32_t index = hash % table->capacity;
   for (;;) {
     TableEntry* entry = &table->entries[index];
     if (entry->key == NULL) {
@@ -116,7 +116,7 @@ vm_string* table_find_string(HashTable* table, const solid_str* ss) {
             return NULL;
       }
       //printf("null key\n");
-    } else if ((solid_strcmp(ss, &entry->key->contents) == 0) && entry->key->contents.hash == ss->hash) {
+    } else if ((strcmp(ss, SOLID_STR_TO_C(entry->key->contents)) == 0) && entry->key->contents.hash == hash) {
       // We found it.
       return entry->key;
     } else {

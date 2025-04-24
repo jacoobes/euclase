@@ -203,8 +203,7 @@ void lobj_print(lobj* o) {
         }
     } break;
     default: {
-        printf("type: %d\n", o->type);
-        printf("Unknown lobj to print");
+        printf("Unknown type %d?", o->type);
     }
   }
 }
@@ -265,7 +264,7 @@ lobj WAF_PRINT(int argc, lobj* args) {
 
 void vm_def_native(VM* vm, const char* symbol, vm_native* nativeobj) {
     vm_string* vbs = vm_string_create(symbol);
-    vm_string* interned = table_find_string(vm->strings, &vbs->contents);
+    vm_string* interned = table_find_string(vm->strings, SOLID_STR_TO_C(vbs->contents), vbs->contents.hash);
 
     if (interned == NULL) {
         table_set(vm->strings, vbs, lobj_num(1));
@@ -529,9 +528,7 @@ int vm_exec(VM *vm, int flags) {
                 lobj lval = vm_peek(vm, 0);
                 uint16_t jump = READ_SHORT(); 
 #ifdef DEBUG
-                printf("I_JMP_FALSY "); 
-                lobj_print(&lval);
-                printf(" %d\n", jump); 
+                printf("I_JMP_FALSY "); lobj_print(&lval); printf(" %d\n", jump); 
 #endif
 
                 if(IS_NUM(lval) && !lval.v.num) {
@@ -646,6 +643,9 @@ int vm_exec(VM *vm, int flags) {
             } break;
             case I_SET_UPVALUE: {
                 uint8_t index = READ_BYTE();
+#ifdef DEBUG
+                printf("I_SET_UPVALUE %d\n", index);
+#endif
                 *cur_frame->closure->upvalues[index]->location = vm_peek(vm, 0);
             } break;
             case I_CLOSE_UPVALUE: {

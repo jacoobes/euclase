@@ -1,7 +1,7 @@
 #include "solid_str.h"
 #include <stdio.h>
 
-static uint32_t hash(const char* key, int length) {
+uint32_t hash_str(const char* key, int length) {
   uint32_t hash = 2166136261u;
   for (int i = 0; i < length; i++) {
     hash ^= (uint8_t)key[i];
@@ -13,11 +13,11 @@ static uint32_t hash(const char* key, int length) {
 solid_str solid_str_new(const char* startbuf) {
     darray_char s = darray_new();
     if(startbuf == NULL) {
-        unsigned long ha = hash(startbuf, 0);
+        unsigned long ha = hash_str(startbuf, 0);
         return (solid_str){.length=0,  .vec=s, .hash=ha };
     } else {
         int len = strlen(startbuf);
-        unsigned long ha = hash(startbuf, len);
+        unsigned long ha = hash_str(startbuf, len);
         darray_append_items_nullterminate(s, startbuf, len);
         return (solid_str){ .length=len, .vec=s, .hash=ha };
     }

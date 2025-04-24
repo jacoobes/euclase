@@ -11,7 +11,10 @@ target("solid-waffle")
     if is_plat("linux", "macosx") then
          add_syslinks("readline")
     end
-
+    add_defines("DEBUG_STRESS_GC")
+    add_defines("DEBUG_LOG_GC")
+    add_defines("DEBUG")
+    add_defines("DEBUG_COMPILER")
 
 
 target("main")
