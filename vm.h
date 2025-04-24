@@ -260,6 +260,8 @@ vm_string* vm_string_create( const char* contents);
 vm_string* vm_string_from_ss(solid_str ss);
 void vm_string_free(vm_string* s);
 vm_upvalue* vm_upvalue_create(lobj* location);
+void vm_object_free(vm_object*);
+
 lobj lobj_str( const char *);
 lobj lobj_num(double x);
 lobj lobj_err(int err);

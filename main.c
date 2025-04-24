@@ -74,7 +74,8 @@ int main(int argc, char **argv) {
 
             const char* looper = QUOTE( 
                 (let (a 10) 
-                    (while a (@a (- a 1))))
+                    (while a 
+                        (@a (- a 1))))
             );
 
             printf("program:\n '%s'\n", looper);

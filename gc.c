@@ -29,17 +29,9 @@ void gc_add_obj(vm_object* obj) {
     }
 }
 
-// Free all tracked allocations
-void gc_collect() {
-
-#ifdef DEBUG_LOG_GC
-    //printf("[GC] Collection complete. Freed %zu objects.\n", freed);
-#endif
-}
 
 // Optional cleanup on exit
 void gc_shutdown() {
-    gc_collect();
 #ifdef DEBUG_LOG_GC
     printf("[GC] Shutdown complete\n");
 #endif

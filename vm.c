@@ -105,6 +105,37 @@ vm_function* vm_function_create(
    return fn;
 }
 
+void vm_object_free(vm_object* obj) {
+    int obj_ty = obj->type;
+    switch(obj_ty) {
+        case OBJ_STR: { 
+            vm_string * fn=(vm_string*)obj;
+            solid_str_free(&fn->contents);
+            free(fn);
+        } break;
+        case OBJ_FUNC : {
+            vm_function* fn=(vm_function*)obj;
+            free(fn->name.v.obj);
+            free(fn);
+        } break;
+        case OBJ_CLOSURE: {
+            // todo: do we need to free the function here?
+            const vm_closure* closure = (vm_closure*)obj;
+            vm_function* fn= closure->fn;
+            vm_object_free((vm_object*)fn);
+            // we don't free the underlying upvalues, that's up to the garbage collector in the future to do that
+            free(closure->upvalues);
+        } break;
+        case OBJ_UPVALUE: {
+            free(obj);
+        } break;
+        case OBJ_USR: {
+        } break;
+        default: {
+            printf("Unknown object type to free");
+        }break;
+    }
+}
 
 void lobj_free(lobj* o) {
   switch (o->type) {
@@ -114,36 +145,7 @@ void lobj_free(lobj* o) {
     case LVAL_ERR:  break;
     case LVAL_SYM: break;
     case LVAL_OBJ: {
-        int obj_ty = o->v.obj->type;
-        switch(obj_ty) {
-            case OBJ_STR: { 
-                vm_string * fn=(vm_string*)o->v.obj;
-                solid_str_free(&fn->contents);
-                free(fn);
-            } break;
-            case OBJ_FUNC : {
-                vm_function* fn=(vm_function*)o->v.obj;
-                free(fn->name.v.obj);
-                free(fn);
-            } break;
-            case OBJ_CLOSURE: {
-                // todo: do we need to free the function here?
-                const vm_closure* closure = (vm_closure*)o->v.obj;
-                vm_function* fn= closure->fn;
-                // we don't free the underlying upvalues, that's up to the garbage collector in the future to do that
-                free(closure->upvalues);
-                free(fn->name.v.obj);
-                free(fn);
-            } break;
-            case OBJ_UPVALUE: {
-                free(o->v.obj);
-            } break;
-            case OBJ_USR: {
-            } break;
-            default: {
-                printf("Unknown object type to free");
-            }break;
-        }
+        vm_object_free(o->v.obj);
     } break;
     
     }

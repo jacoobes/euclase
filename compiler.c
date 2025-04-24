@@ -565,7 +565,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_emit(compiler, sexpr_list_first(b_form));
                     }
 
-                    compiler_leave_scope(compiler);
+                    //compiler_leave_scope(compiler);
 
                 } else if (strcmp(symbol, "var") == 0) { //global variable
                     const SExpr* varname = sexpr_list_first(rest);
@@ -645,19 +645,30 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_emit(compiler, sexpr_list_first(rest));
                     const int loop_back_loc = BYTE_LEN;
                     const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY); // returns where the ushort begins +2
-
                     compiler_write_byte(compiler, I_POP);
-                    rest = sexpr_list_rest(rest);
-                    compiler_emit(compiler, sexpr_list_first(rest)); 
+
+                    if (sexpr_list_len(rest)) {
+                        SExpr* cur_exp;
+                        sexpr_list_foreach(cur_exp, rest) {
+                            // printf("cur form"); print_sexpr(sexpr_list_first(cur_exp)); printf("\n");
+                            compiler_emit(compiler, sexpr_list_first(cur_exp));
+                        };
+                    // else emit a 0, or falsy in this lang
+                    } else {
+                        compiler_load_const(compiler, lobj_num(0));
+                    }
+
+                    //compiler_emit(compiler, sexpr_list_first(rest)); 
+
                     compiler_write_byte(compiler, I_LOOP);
                     compileunit_write_ushort(compiler->current_unit, BYTE_LEN - loop_back_loc + 2);
                     compiler_jump_patch(compiler, ushort_begin, BYTE_LEN-ushort_begin-2);
+                    compiler_write_byte(compiler, I_POP);
                     #undef BYTE_LEN
 
                 } else if(symbol[0] == '@')  {
                     char* ident = symbol+1;
-                    SExpr* new_value = sexpr_list_first(rest);
-                    compiler_emit(compiler, new_value);
+                    compiler_emit(compiler, sexpr_list_first(rest));
                     compiler_rebind_localsymbol(compiler, ident);
                 } else {
                     // if its none of the compiler specials, we assume it's a function call.

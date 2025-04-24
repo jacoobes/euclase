@@ -308,4 +308,6 @@ Other samples can be found in the [samples directory]("./sample")
 - overflow on large numbers (fact 255) would seg fault
     - check for overflow
 - garbage collection bugs
-- if empty space at end of file / str, will say "failed to parse atom ' '"
+- let scopes
+- while loops dont accept more than one form
+

@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include "vm.h"
+#include "table.h"
 #include "gc.h"
 
 void* reallocate (void* ptr, size_t old_size, size_t new_size); 

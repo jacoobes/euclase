@@ -18,7 +18,7 @@ void* reallocate (void* ptr, size_t old_size, size_t new_size) {
     }
 
 #ifdef DEBUG_STRESS_GC
-    gc_collect();
+    //collect_garbage();
 #endif
     /*
      * If the first argument is a null pointer, realloc() allocates a new memory block, behaving similarly to malloc().
@@ -37,6 +37,12 @@ void mark_value(VM* vm, lobj value) {
   if (IS_OBJ(value))  { 
     mark_object(vm, value.v.obj);
   } 
+}
+
+static void mark_array(VM* vm, lobj* array, int count) {
+    for (int i =0 ;i < count; i++) {
+        mark_value(vm, array[i]);
+    }
 }
 
 void mark_object(VM* vm, vm_object* object) {
@@ -76,20 +82,24 @@ void mark_roots(VM* vm) {
        upvalue = upvalue->next) {
     mark_object(vm,(vm_object*)upvalue);
   }
-  mark_table(vm->globals);
+  mark_table(vm, vm->globals);
 }
 
 void blacken_obj(VM* vm, vm_object* o) {
     switch(o->type) {
         case OBJ_CLOSURE: {
-
+            vm_closure* cls = ((vm_closure*)o);
+            mark_object(vm, (vm_object*)cls->fn);
+            for(int i =0; i < cls->upvalues_ct; i++) {
+                mark_object(vm, (vm_object*)cls->upvalues);
+            }
         } break;
         case OBJ_STR: {
-
         } break;
         case OBJ_FUNC: { 
             vm_function* fn = ((vm_function*)o);
             mark_value(vm, fn->name);
+            mark_array(vm, fn->values, fn->values_ct);
         } break;
         case OBJ_UPVALUE: {
             //  When an upvalue is closed,
@@ -113,11 +123,29 @@ void trace_refs(VM* vm){
 
 
 void sweep(VM* vm) {
-    
+    vm_object* previous = NULL;
+    vm_object* object = vm->objects;
+    while(object != NULL) {
+        if(object->is_marked) {
+            object->is_marked=false;
+            previous = object;
+            object = object->next;
+        } else {
+            vm_object* unreached = object;
+            object = object->next;
+            if(previous != NULL) {
+                previous->next = object;
+            } else {
+                vm->objects = object;
+            }
+            vm_object_free(unreached);
+        }
+    }
 }
+
 void collect_garbage(VM* vm) {
     #ifdef DEBUG_LOG_GC
-      printf("-- gc begin\n");
+      printf("-- collecting gc\n");
     #endif
 
     mark_roots(vm);

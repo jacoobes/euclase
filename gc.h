@@ -15,6 +15,5 @@ static GarbageCollector gc;
 void gc_init();
 void gc_add_obj(vm_object* obj);
 
-void gc_collect();
 void gc_shutdown();
 #endif
