@@ -2,37 +2,35 @@
 
 // Initialize the GC
 void gc_init() {
-    gc.count = 0;
+    gc.objs=NULL;
 #ifdef DEBUG_LOG_GC
     printf("[GC] Initialized\n");
 #endif
 }
 
-// Register a new allocation
-void* gc_alloc(size_t size, const char* tag) {
-    void* ptr = malloc(size);
-    if (!ptr) {
-        fprintf(stderr, "[GC] Allocation failed for tag: %s\n", tag);
-        exit(EXIT_FAILURE);
-    }
 
-    gc.count++;
+void gc_add_obj(vm_object* obj) {
 
 #ifdef DEBUG_LOG_GC
     printf("[GC] Allocated %zu bytes for %s (%p)\n", size, tag, ptr);
 #endif
 
-#ifdef DEBUG_STRESS_GC
-    gc_collect();
-#endif
-
-    return ptr;
+    if (obj == NULL) {
+        printf("obj is null while inserting into gc\n");
+        exit(1);
+    }
+    if(gc.objs == NULL) {
+        gc.objs = obj;
+    } else {
+        // attach object to linked list of all objects
+        // move pointer to added object
+        gc.objs->next = obj;
+        gc.objs = gc.objs->next;
+    }
 }
 
 // Free all tracked allocations
 void gc_collect() {
-    size_t freed = 0;
-    gc.count = 0;
 
 #ifdef DEBUG_LOG_GC
     printf("[GC] Collection complete. Freed %zu objects.\n", freed);

@@ -80,5 +80,8 @@ int localchart_insert(LocalChart *lc, const char* symbol);
 
 void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc);
 void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_loc);
+
+vm_string* compiler_fetch_string(const Compiler* compiler, const char* symbol);
+
 #endif
 

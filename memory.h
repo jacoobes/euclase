@@ -8,7 +8,6 @@
 void* reallocate (void* ptr, size_t old_size, size_t new_size); 
 void mark_value(VM* vm, lobj lobj);
 void mark_object(VM* vm, vm_object* object);
-void mark_table(HashTable* table);
 void collect_garbage(VM* vm);
 
 
@@ -18,5 +17,7 @@ void collect_garbage(VM* vm);
 // MALLOC with casting
 #define ALLOCATE(ty, count) \
     ((ty*)reallocate(NULL, 0, sizeof(ty) * (count)))
+
+
 
 #endif

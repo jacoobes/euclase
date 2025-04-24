@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include "table.h"
 #include "./vm.h"
-#include "memory.h"
+#include "./memory.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +10,8 @@
 void vm_object_init(vm_object* vmobj, LOBJ_TYPE lty) {
    vmobj->is_marked=false; 
    vmobj->type=lty;
+   // gc_add_obj adds to the chain of objects
+   gc_add_obj(vmobj);
 }
 
 vm_upvalue* vm_upvalue_create(lobj* ref) {
@@ -26,6 +28,15 @@ vm_string* vm_string_create(const char* contents) {
     s->contents=solid_str_new(contents);
     return s;
 }
+
+
+vm_string* vm_string_from_ss(solid_str ss) {
+    vm_string* s = ALLOCATE(vm_string, 1);
+    vm_object_init(&s->obj, OBJ_STR);
+    s->contents = ss;
+    return s;
+}
+
 void vm_string_free(vm_string* s) {
     solid_str_free(&s->contents);
     free(s);
@@ -276,6 +287,7 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     vm->globals = globals;
     vm->strings = strings;
         
+    vm->objects = NULL;
 
     vm->gray_capacity=0;
     vm->gray_count=0;

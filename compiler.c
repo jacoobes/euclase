@@ -161,7 +161,25 @@ int compiler_write_byte(const Compiler *compiler, const uint8_t byte) {
     return darray_size(cur_unit->bytes)-1;
 }
 
-// adds value to current units' compiler pool. Returns the size of array after pushing
+vm_string* compiler_fetch_string(const Compiler* compiler, const char* symbol) {
+    solid_str str = solid_str_new(symbol); 
+
+    vm_string* dupe = table_find_string(compiler->strings, &str);
+    // if dupe doesn't exist (it's new)
+    if(!dupe) {
+        vm_string* vmstr = vm_string_from_ss(str);
+        //compiler_load_const(compiler, into_lobj(vmstr));
+        table_set(compiler->strings, vmstr, lobj_num(1));
+
+        return vmstr;
+    } else {
+        //compiler_load_const(compiler, into_lobj((void*)dupe));
+        solid_str_free(&str);
+        return dupe;
+    }
+}
+
+// adds value to current units' compiler pool. Returns the size of array before pushing
 int compiler_add_const(const Compiler *compiler, const lobj value) {
     CompileUnit* cu = compiler->current_unit;
 

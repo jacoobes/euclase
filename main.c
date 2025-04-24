@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include "gc.h"
 #include "vm.h"
 #include "reader.h"
 #include "compiler.h"
@@ -190,16 +191,10 @@ void emit(Compiler* compiler, SExpr *sexpr) {
         }
         break;
         case SEXPR_STRING: {
-            vm_string* str = vm_string_create(cur->value.string);
-            const vm_string* dupe = table_find_string(compiler->strings, &str->contents);
-            // if dupe doesn't exist (it's new)
-            if(!dupe) {
-                compiler_load_const(compiler, into_lobj(str));
-                table_set(compiler->strings, str, lobj_num(1));
-            } else {
-                compiler_load_const(compiler, into_lobj((void*)dupe));
-                vm_string_free(str);
-            }
+            // strings are interned. I need someway to create a string 
+            // which is  
+            vm_string* resolved_vmstring = compiler_fetch_string(compiler, cur->value.string);
+            compiler_load_const(compiler, into_lobj(resolved_vmstring));
         }
         break;
         case SEXPR_LIST: {
@@ -300,7 +295,8 @@ void emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
                     } else {
-                        const int str_loc = compiler_add_const(compiler, lobj_str(fn_name->value.symbol));
+                        vm_string* c = compiler_fetch_string(compiler, fn_name->value.symbol);
+                        const int str_loc = compiler_add_const(compiler, into_lobj(c));
                         compiler_write_byte(compiler, I_SET_GLOBAL);
                         compiler_write_byte(compiler, str_loc);
                     }
@@ -536,11 +532,15 @@ int main(int argc, char **argv) {
             lobj main = compile_unit_get_closure(main_fn);
             compiler_destroy(&compiler);
 
+            gc_init();
+
             VM vm;
             vm_create(&vm, &globals, &strings, &main);
             vm_exec(&vm, 0);
 
             vm_free(&vm);
+
+            gc_shutdown();
 
         } else {
             size_t read;

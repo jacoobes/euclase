@@ -145,10 +145,10 @@ void table_print(HashTable* table) {
         }
     }
 }
-void mark_table(HashTable* table) {
+void mark_table(VM* vm, HashTable* table) {
     for (int i = 0; i < table->capacity; i++) {
         TableEntry* entry = &table->entries[i];
-        mark_object((vm_object*)entry->key);
-        mark_value(entry->value);
+        mark_object(vm, (vm_object*)entry->key);
+        mark_value(vm, entry->value);
   }
 }

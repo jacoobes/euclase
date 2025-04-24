@@ -25,7 +25,7 @@ enum Instruction {
     I_DIV         , // divide two numbers
     I_MOD         , // modulus two numbers
     I_LTE         , // LTE two numbers
-    I_GT         , //  GTE two numbers
+    I_GT          , //  GTE two numbers
     I_CALL        , // call function
     I_JMP         , // jmp to instr ptr
     I_JMP_FALSY   , // jmp if falsy
@@ -56,9 +56,11 @@ typedef enum {
 
 
 // the base object class
-typedef struct {
+typedef struct vm_object {
    LOBJ_TYPE type; 
    bool is_marked;
+
+   struct vm_object* next;
 } vm_object;
 
 // a union of all possible virtual machine values
@@ -154,13 +156,12 @@ typedef struct VM {
     vm_upvalue* open_upvalues;
     vm_closure* main_fn;
     int frame_count;
-
+    
+    vm_object* objects;
 
     int gray_count;
     int gray_capacity;
     vm_object** gray_stack;
-    
-    
 
 } VM;
 
@@ -256,6 +257,7 @@ vm_native* vm_native_create(
 
 vm_closure* vm_closure_create( vm_function* fn);
 vm_string* vm_string_create( const char* contents);
+vm_string* vm_string_from_ss(solid_str ss);
 void vm_string_free(vm_string* s);
 vm_upvalue* vm_upvalue_create(lobj* location);
 lobj lobj_str( const char *);

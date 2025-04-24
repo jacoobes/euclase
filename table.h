@@ -31,6 +31,6 @@ int table_delete(const HashTable* tbl, vm_string*);
 void table_free(HashTable* table);
 vm_string* table_find_string(HashTable* table, const solid_str* ss);
 void table_print(HashTable* table);
-void mark_table(HashTable* table);
+void mark_table(VM* vm, HashTable* table);
 
 #endif
