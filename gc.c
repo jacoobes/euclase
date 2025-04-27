@@ -1,8 +1,13 @@
 #include "gc.h"
 
 // Initialize the GC
-void gc_init() {
+void gc_init(VM* vm) {
     gc.objs=NULL;
+    gc.vm = vm;
+
+    gc.bytes_allocated = 0;
+    // The starting threshold here is arbitrary
+    gc.next_gc = 1024 * 1024;
 #ifdef DEBUG_LOG_GC
     printf("[GC] Initialized\n");
 #endif

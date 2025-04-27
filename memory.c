@@ -8,6 +8,7 @@
  * or if it points to such a block that has since been released by a call to free() or realloc(), then the behavior is undefined.
  */
 void* reallocate (void* ptr, size_t old_size, size_t new_size) {
+    gc.bytes_allocated += new_size - old_size;
     if(new_size == 0) {
         free(ptr);
         return NULL;
@@ -18,8 +19,11 @@ void* reallocate (void* ptr, size_t old_size, size_t new_size) {
     }
 
 #ifdef DEBUG_STRESS_GC
-    //collect_garbage();
+    collect_garbage(gc.vm);
 #endif
+    if(gc.bytes_allocated > gc.next_gc) {
+        collect_garbage(gc.vm);
+    }
     /*
      * If the first argument is a null pointer, realloc() allocates a new memory block, behaving similarly to malloc().
      * Otherwise, if the pointer argument does not point to a memory block allocated by malloc(), calloc(), or realloc(),
@@ -68,7 +72,7 @@ void mark_object(VM* vm, vm_object* object) {
 
 
 void mark_roots(VM* vm) {
-  for (lobj * slot = vm->stack; slot < vm->stack_top; slot++) {
+  for (lobj* slot = vm->stack; slot < vm->stack_top; slot++) {
     mark_value(vm, *slot);
   }
 
@@ -146,14 +150,37 @@ void sweep(VM* vm) {
 void collect_garbage(VM* vm) {
     #ifdef DEBUG_LOG_GC
       printf("-- collecting gc\n");
+      size_t before = gc.bytes_allocated;
     #endif
 
+    #ifdef DEBUG_LOG_GC
+      printf("GC mark roots\n");
+    #endif
     mark_roots(vm);
     
+
+    #ifdef DEBUG_LOG_GC
+        printf("GC trace refs \n");
+    #endif
     trace_refs(vm);
-    
+
+    #ifdef DEBUG_LOG_GC
+        printf("GC mark white\n");
+    #endif
+    table_mark_white(vm->strings);
+
+    #ifdef DEBUG_LOG_GC
+        printf("GC sweep\n");
+    #endif
     sweep(vm);
+
+
+    gc.next_gc = gc.bytes_allocated * GC_HEAP_GROW_FACTOR;
+
     #ifdef DEBUG_LOG_GC
       printf("-- gc end\n");
+      printf("   collected %zu bytes (from %zu to %zu) next at %zu\n", 
+            before -  gc.bytes_allocated, before, gc.bytes_allocated, gc.next_gc
+        );
     #endif
 }

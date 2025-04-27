@@ -152,3 +152,15 @@ void mark_table(VM* vm, HashTable* table) {
         mark_value(vm, entry->value);
   }
 }
+
+
+
+void table_mark_white(HashTable* table) {
+    for (int i = 0; i < table->capacity; i++) {
+        TableEntry* entry = &table->entries[i];
+        if (entry->key != NULL && !entry->key->obj.is_marked) { //if it is a white object
+          // we delete it to avoid any dangling pointers
+          table_delete(table, entry->key);
+        }
+    }
+}

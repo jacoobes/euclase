@@ -109,10 +109,11 @@ int main(int argc, char **argv) {
             lobj main = compile_unit_get_closure(main_fn);
             compiler_destroy(&compiler);
 
-            gc_init();
 
             VM vm;
             vm_create(&vm, &globals, &strings, &main);
+            gc_init(&vm);
+
             vm_exec(&vm, 0);
 
             vm_free(&vm);
