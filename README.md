@@ -294,7 +294,7 @@ Current instructions that the assembler can handle:
 ```
 
 ### Other samples:
-Other samples can be found in the [samples directory]("./sample")
+Other samples can be found in the [samples directory](./sample)
 
 
 ## todo
