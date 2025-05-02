@@ -1,4 +1,4 @@
-# solid waffle (name to change)
+# euclase
 - [Virtual Machine](#virtual-machine-specification)
 - [Language Specification](#language-specification)
 - [Assembler](#assembler)
