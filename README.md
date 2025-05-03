@@ -1,7 +1,14 @@
-# solid waffle (name to change)
+# euclase
 - [Virtual Machine](#virtual-machine-specification)
 - [Language Specification](#language-specification)
 - [Assembler](#assembler)
+
+
+## TODO
+
+- garbage collection (priority)
+- modules
+- standard library
 
 Build system = [xmake](https://xmake.io/#/)
   
