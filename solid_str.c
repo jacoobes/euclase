@@ -31,6 +31,7 @@ void solid_str_free(solid_str* s) {
 void solid_str_appends(solid_str* s, char* cs) {
     darray_append_items_nullterminate(s->vec, cs, strlen(cs));
     s->length+=strlen(cs);
+    s->hash=hash_str(s->vec.item, s->length);
 }
 
 char solid_str_at(solid_str* s, int idx) {

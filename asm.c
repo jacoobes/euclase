@@ -358,8 +358,8 @@ int main(int argc, char** args) {
     printf("Finding main entry...\n");
     lobj main = asm_get_entry(&assembler);
     printf("Found main entry...\n");
-    vm_create(&vm, &globals, &strings, &main);
-    int result = vm_exec(&vm, 0);
+    vm_create(&vm, &globals, &strings);
+    int result = vm_exec(&vm, &main, 0);
     if(result) {
         
     }

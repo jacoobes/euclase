@@ -18,12 +18,13 @@ void* reallocate (void* ptr, size_t old_size, size_t new_size) {
         exit(1);
     }
 
-#ifdef DEBUG_STRESS_GC
-    collect_garbage(gc.vm);
-#endif
-    if(gc.bytes_allocated > gc.next_gc) {
-        collect_garbage(gc.vm);
-    }
+// #ifdef DEBUG_STRESS_GC
+//     printf("[GC] stress test\n");
+//     collect_garbage(gc.vm);
+// #endif
+     if(gc.bytes_allocated > gc.next_gc) {
+     //    collect_garbage();
+     }
     /*
      * If the first argument is a null pointer, realloc() allocates a new memory block, behaving similarly to malloc().
      * Otherwise, if the pointer argument does not point to a memory block allocated by malloc(), calloc(), or realloc(),
@@ -37,13 +38,13 @@ void* reallocate (void* ptr, size_t old_size, size_t new_size) {
     return result;
 }
 
-void mark_value(VM* vm, lobj value) {
-  if (IS_OBJ(value))  { 
-    mark_object(vm, value.v.obj);
+void mark_value(VM* vm, const lobj obj) {
+  if (IS_OBJ(obj))  {
+    mark_object(vm, obj.v.obj);
   } 
 }
 
-static void mark_array(VM* vm, lobj* array, int count) {
+static void mark_array(VM* vm, const lobj* array, const int count) {
     for (int i =0 ;i < count; i++) {
         mark_value(vm, array[i]);
     }
@@ -51,7 +52,7 @@ static void mark_array(VM* vm, lobj* array, int count) {
 
 void mark_object(VM* vm, vm_object* object) {
     if(object == NULL) return;
-
+    printf("obj is not null");
     // prevent cycle 
     if (object->is_marked) return;
 
@@ -72,11 +73,13 @@ void mark_object(VM* vm, vm_object* object) {
 
 
 void mark_roots(VM* vm) {
-  for (lobj* slot = vm->stack; slot < vm->stack_top; slot++) {
+  printf("[GC] Marking stack content\n");
+  for (const lobj* slot = vm->stack; slot < vm->stack_top; slot++) {
     mark_value(vm, *slot);
   }
 
 
+  printf("[GC] Marking frames\n");
   for (int i = 0; i < vm->frame_count; i++) {
     mark_object(vm, (vm_object*)vm->call_stack[i].closure);
   }
@@ -92,7 +95,11 @@ void mark_roots(VM* vm) {
 void blacken_obj(VM* vm, vm_object* o) {
     switch(o->type) {
         case OBJ_CLOSURE: {
+
             vm_closure* cls = ((vm_closure*)o);
+    #ifdef DEBUG_LOG_GC
+            printf("blackening closure") ; lobj_println(&cls->fn->name);
+    #endif
             mark_object(vm, (vm_object*)cls->fn);
             for(int i =0; i < cls->upvalues_ct; i++) {
                 mark_object(vm, (vm_object*)cls->upvalues);

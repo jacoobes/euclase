@@ -9,15 +9,15 @@
 
 typedef struct {
     vm_object* objs;
-    VM* vm;
-
     size_t bytes_allocated;
     size_t next_gc;
+
+    bool is_init;
 } GarbageCollector;
 
 static GarbageCollector gc;
 
-void gc_init(VM* vm);
+void gc_init();
 void gc_add_obj(vm_object* obj);
 
 void gc_shutdown();

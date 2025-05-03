@@ -40,6 +40,7 @@ enum Instruction {
     I_GET_UPVALUE ,
     I_SET_UPVALUE ,
     I_CLOSE_UPVALUE ,
+    I_STR_ADD
 };
 
 
@@ -176,7 +177,7 @@ typedef struct VM {
  * @param strings
  * @param main A pointer to the main function (represented as an lobj) to be executed by the VM.
  */
-void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main);
+void vm_create(VM* vm, HashTable* globals, HashTable* strings);
 
 /**
  * Executes the virtual machine with the given configuration and flags.
@@ -184,7 +185,7 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main);
  * @param vm A pointer to the virtual machine instance to be executed.
  * @param flags An integer representing the flags used for customizing the execution of the virtual machine.
  */
-int vm_exec(VM*, int);
+int vm_exec(VM*, lobj*, int);
 
 /**
  * Frees the memory associated with the given virtual machine (VM) instance.

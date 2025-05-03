@@ -49,12 +49,6 @@ target("teststring")
     add_deps("solid-waffle")
     set_group("test")
    
-target("testvm")
-    set_kind("binary")
-    add_files("test/vmtest.c")
-    set_languages("c11")
-    add_deps("solid-waffle")
-    set_group("test")
 
 target("testcompiler")
     set_kind("binary")

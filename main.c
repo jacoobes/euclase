@@ -78,20 +78,25 @@ int main(int argc, char **argv) {
                         (@a (- a 1))))
             );
 
-            printf("program:\n '%s'\n", looper);
+            printf("program:\n '%s'\n", fib);
             size_t count;
-            SExpr **exprs = read_all(looper, &count); // or read appropriate function
+            SExpr **exprs = read_all(fib, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
 
+            gc_init();
             HashTable globals, strings;
             table_create(&globals);
             table_create(&strings);
+
+            VM vm;
+            vm_create(&vm, &globals, &strings);
 
             Compiler compiler;
             compiler_create(&compiler, &globals, &strings);
             for (size_t i = 0; i < count; i++) {
                 compiler_emit(&compiler, exprs[i]);
             }
+            compiler_destroy(&compiler);
 
             // done with s expressions. we free all of them
             for(int i =0; i < count; i++) {
@@ -107,18 +112,13 @@ int main(int argc, char **argv) {
 
 
             lobj main = compile_unit_get_closure(main_fn);
-            compiler_destroy(&compiler);
+            
 
-
-            VM vm;
-            vm_create(&vm, &globals, &strings, &main);
-            gc_init(&vm);
-
-            vm_exec(&vm, 0);
+            vm_exec(&vm, &main, 0);
 
             vm_free(&vm);
 
-            gc_shutdown();
+            //gc_shutdown();
 
         } else {
             size_t read;
@@ -168,8 +168,8 @@ int main(int argc, char **argv) {
             compiler_destroy(&compiler);
 
             VM vm;
-            vm_create(&vm, &globals, &strings, &main);
-            vm_exec(&vm, 0);
+            vm_create(&vm, &globals, &strings);
+            vm_exec(&vm, &main, 0);
 
 
             vm_free(&vm);

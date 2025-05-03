@@ -62,6 +62,7 @@ vm_closure* vm_closure_create(vm_function* fn) {
 
 
 vm_native* vm_native_create(int argc, native_func fn) {
+
     vm_native* nativeobj = ALLOCATE(vm_native, 1);
     vm_object_init(&nativeobj->obj, OBJ_NATIVE);
 
@@ -280,7 +281,7 @@ void vm_def_native(VM* vm, const char* symbol, vm_native* nativeobj) {
     table_set(vm->globals, AS_STR(vm_pop(vm)), vm_pop(vm));
 }
 
-void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
+void vm_create(VM* vm, HashTable* globals, HashTable* strings) {
     reset_stack(vm);
     vm->frame_count=0;
     vm->open_upvalues = NULL;
@@ -294,19 +295,9 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings, lobj* main) {
     vm->gray_count=0;
     vm->gray_stack = NULL;
 
-    if(!is_closure(main)) {
-        fprintf(stderr, "Main is not callable, got %d\n", main->type);
-        exit(1);
-    }
-    vm_closure* main_closure = as_closure(main);
-    vm->main_fn=main_closure;
-
     // define print function
     vm_def_native(vm, "print", vm_native_create(1, WAF_PRINT));
-
-    if(apply(vm, main_closure, 0) != 0) {
-        printf("main fn failed");
-    }
+        
 }
 
 static vm_upvalue* captureUpvalue(VM* vm, lobj* local) {
@@ -368,7 +359,16 @@ solid_str vm_stacktrace(VM* vm, char* error) {
 
 
 
-int vm_exec(VM *vm, int flags) {
+int vm_exec(VM *vm, lobj* main, int flags) {
+
+    //ignite the virtual machine with the first call frame
+    int res = apply(vm, (vm_closure*)main->v.obj, 0); 
+    //////
+    if (res != 0) {
+        printf("failed to start virtual machine by invoking main");
+        return res;
+    }
+
     // framecount will always have one, the main function
     CallFrame* cur_frame = &vm->call_stack[vm->frame_count - 1]; 
 
@@ -656,6 +656,22 @@ int vm_exec(VM *vm, int flags) {
 #endif
                 closeUpvalues(vm, vm->stack_top - 1);
                 vm_pop(vm);
+            } break;
+            case I_STR_ADD: {
+                lobj b = vm_pop(vm); lobj a = vm_pop(vm);
+                if (IS_STR(a) && IS_STR(b)) {
+#ifdef DEBUG
+                    printf("SUB: "); lobj_println(&b);
+#endif
+                    
+                    solid_str lhs = AS_STR(a)->contents;
+                    solid_str rhs = AS_STR(a)->contents;
+
+                    vm_push(vm, into_lobj(NULL));
+                } else {
+                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror SUB")));
+                    return 1;
+                }
             } break;
             default: {
                 printf("Unknown opcode '%c', misalignment?", instruction);
