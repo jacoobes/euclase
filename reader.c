@@ -58,14 +58,26 @@ SExpr *read_number(const char *input, const int sign, int *pos) {
 }
 
 SExpr *read_symbol(const char *input, int *pos) {
+    // Fixed-size buffer: a symbol can hold at most capacity - 1 characters,
+    // because the last byte is needed for the NUL terminator.
     const int capacity = 256;
-    char *symbol = calloc(capacity, sizeof(char));
-    int i = 0;
-    char c = input[*pos];
-    while (is_identifier_char(c)) {
-        symbol[i++] = c;
-        c = next(input,pos);
+
+    // 1. Measure the symbol first. *pos points at its first character and it
+    //    ends at the first character that cannot be part of an identifier.
+    int len = 0;
+    while (is_identifier_char(input[*pos + len])) len++;
+
+    // 2. Check it fits before writing anything into the buffer.
+    if (len >= capacity) {
+        fprintf(stderr, "Symbol too long: %d characters (max %d)\n", len, capacity - 1);
+        exit(1);
     }
+
+    // 3. Copy it. calloc zero-fills, so symbol[len] is already the NUL.
+    char *symbol = calloc(capacity, sizeof(char));
+    memcpy(symbol, input + *pos, len);
+    *pos += len; // leave *pos on the character after the symbol
+
     SExpr *expr = ALLOC_SEXPR();
     if (strcmp(symbol, "true") == 0) {
         expr->type = SEXPR_NUMBER;

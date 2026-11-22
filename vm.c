@@ -279,7 +279,8 @@ void vm_def_native(VM* vm, const char* symbol, vm_native* nativeobj) {
     vm_push(vm, into_lobj(interned));
     vm_push(vm, into_lobj(nativeobj));
     // The order in which the two vm_pop calls are evaluated is unspecified in C.
-    // Apple clang on arm64 evaluates left to right, so the first pop returns the 32-byte vm_native, which is cast to vm_string* and used as the key.
+    // Apple clang on arm64 evaluates left to right,
+    // The first pop returns the 32-byte vm_native, which is cast to vm_string* and used as the key.
     // find_entry then reads k->contents.hash past the end of that allocation. The "print" string becomes the value.
     lobj v = vm_pop(vm);
     lobj k = vm_pop(vm);
