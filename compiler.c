@@ -553,9 +553,20 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         SExpr* rhs = sexpr_list_first(next);
                         compiler_emit(compiler, rhs);
 
-                        const int reg = localchart_insert(compiler->current_unit->locals_chart, lhs->value.symbol);
-                        compiler_write_byte(compiler, I_SET_LOCAL);
-                        compiler_write_byte(compiler, reg);
+                        LocalChart* lc = compiler->current_unit->locals_chart;
+                        int reg = localchart_insert(lc, lhs->value.symbol);
+                        if (reg == -1) {
+                            // name already bound earlier in this let: the later binding
+                            // overwrites it. The new value was pushed into a stack slot no
+                            // local owns, so pop it to keep later locals' slots aligned.
+                            reg = localchart_resolve_symbol(lc, lhs->value.symbol);
+                            compiler_write_byte(compiler, I_SET_LOCAL);
+                            compiler_write_byte(compiler, reg);
+                            compiler_write_byte(compiler, I_POP);
+                        } else {
+                            compiler_write_byte(compiler, I_SET_LOCAL);
+                            compiler_write_byte(compiler, reg);
+                        }
                         even+=1;
                         cur_exp = next;
                     }
