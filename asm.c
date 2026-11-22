@@ -39,12 +39,17 @@ static Label* labels_find(LabelArray* array, const char* name) {
 }
 
 void asm_init(Assembler* a) {
+    a->current_label = NULL;
     darray_init(a->labels);
 }
 
 //writing to chunk of label's code
 static void write_byte(Assembler* a, uint8_t byte) {
     Label* current_label = a->current_label;
+    if (current_label == NULL) {
+        fprintf(stderr, "Instruction found before any label; start with a label such as ':main 0'\n");
+        exit(1);
+    }
     if (current_label->capacity < current_label->count + 1) {
         int new_capacity = current_label->capacity == 0 ? 8 : current_label->capacity * 2;
         current_label->code = realloc(current_label->code, new_capacity);
