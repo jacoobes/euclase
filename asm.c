@@ -116,6 +116,17 @@ static char *asm_strdup(const char *str)
 	return ret;
 }
 
+// Read the operand that must follow `what` (an instruction or label name).
+// read_token returns NULL at end of input; report that instead of crashing.
+static char* read_operand(const char* source, int* pos, const char* what) {
+    char* operand = read_token(source, pos);
+    if (operand == NULL) {
+        fprintf(stderr, "Expected operand after %s, reached end of input\n", what);
+        exit(1);
+    }
+    return operand;
+}
+
 int asm_compile(Assembler* a, const char* source) {
     int pos = 0;
 
@@ -137,7 +148,7 @@ int asm_compile(Assembler* a, const char* source) {
                 exit(1);
             }
             char* tokname = asm_strdup(token + 1);
-            char* arity = read_token(source, &pos);
+            char* arity = read_operand(source, &pos, "label");
             labels_write(a, tokname, parse_number(arity));
             free(token); free(arity);
             continue;
@@ -150,7 +161,7 @@ int asm_compile(Assembler* a, const char* source) {
             write_byte(a, I_HALT);
         } else if (strcmp(token, "LOAD") == 0) {
             write_byte(a, I_LOAD);
-            char* operand = read_token(source, &pos);
+            char* operand = read_operand(source, &pos, "LOAD");
             if(operand[0] == ':') {
                 char* tokname = operand+1;
                 Label* addr = labels_find(&a->labels, tokname);
@@ -191,35 +202,35 @@ int asm_compile(Assembler* a, const char* source) {
             write_byte(a, I_RETURN);
         } else if (strcmp(token, "CALL") == 0) {
             write_byte(a, I_CALL);
-            char* operand = read_token(source, &pos);
+            char* operand = read_operand(source, &pos, "CALL");
             write_byte(a, parse_number(operand));
             free(operand);
         } else if (strcmp(token, "GET_LOCAL") == 0) {
             write_byte(a, I_GET_LOCAL);
             free(token);
-            token = read_token(source, &pos);
+            token = read_operand(source, &pos, "GET_LOCAL");
             write_byte(a, parse_number(token));
         } else if (strcmp(token, "SET_LOCAL") == 0) {
             write_byte(a, I_SET_LOCAL);
             free(token);
-            token = read_token(source, &pos);
+            token = read_operand(source, &pos, "SET_LOCAL");
             write_byte(a, parse_number(token));
         } else if (strcmp(token, "JMP") == 0) {
             write_byte(a, I_JMP);
-            token = read_token(source, &pos);
+            token = read_operand(source, &pos, "JMP");
             int offset = parse_number(token);
             write_uint16_t(a, offset);
         } else if (strcmp(token, "JMP_FALSY") == 0) {
             write_byte(a, I_JMP_FALSY);
             free(token);
-            token = read_token(source, &pos);
+            token = read_operand(source, &pos, "JMP_FALSY");
             uint16_t offset = parse_number(token);
             write_uint16_t(a, offset);
 
         } else if (strcmp(token, "LOOP") == 0) {
             write_byte(a, I_LOOP);
             free(token);
-            token = read_token(source, &pos);
+            token = read_operand(source, &pos, "LOOP");
             uint16_t offset = parse_number(token);
             write_uint16_t(a, offset);
 
