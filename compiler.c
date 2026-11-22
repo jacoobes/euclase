@@ -178,8 +178,13 @@ vm_string* compiler_fetch_string(const Compiler* compiler, const char* symbol) {
 int compiler_add_const(const Compiler *compiler, const lobj value) {
     CompileUnit* cu = compiler->current_unit;
 
+
+
     // if is string, try to find cached string of same hash and contents
     darray_push(cu->constants, value);
+
+
+    // the size of array before pushing
     return darray_size(cu->constants)-1;
 }
 
@@ -579,8 +584,13 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     //compiler_leave_scope(compiler);
 
                 } else if (strcmp(symbol, "var") == 0) { //global variable
+                    if(rest == NULL) {
+                        printf("No name found for declaration 'var'");
+                        exit(1);
+                    }
                     const SExpr* varname = sexpr_list_first(rest);
-                    if(varname->type!= SEXPR_SYMBOL) {
+                    
+                    if(varname->type != SEXPR_SYMBOL) {
                         printf("For var declaration, expected symbol");
                         exit(1);
                     }
@@ -598,15 +608,17 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_write_byte(compiler, I_SET_GLOBAL);
                     compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
-                    #define BYTE_LEN \
-                        (darray_size(compiler->current_unit->bytes))
 
                     int if_len = sexpr_list_len(rest);
-
                     if(if_len != 3) {
                         printf("Special form 'if' error: Expected 3 expressions");
                         exit(1);
                     }
+
+                    #define BYTE_LEN \
+                        (darray_size(compiler->current_unit->bytes))
+
+                    
 
 
                     SExpr* condition = sexpr_list_first(rest);
