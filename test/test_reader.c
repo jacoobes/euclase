@@ -395,6 +395,43 @@ void test_read_symbol_length_limit() {
     printf("test_read_symbol_length_limit passed!\n");
 }
 
+// String literals must always be NUL-terminated, including ones long enough
+// to fill or grow the 256-byte buffer (issue #7).
+static void check_string_literal(int n) {
+    // build "aaa...a" as an exact-size heap buffer so sanitizers catch over-reads
+    char* input = malloc(n + 3);
+    input[0] = '"';
+    memset(input + 1, 'a', n);
+    input[n + 1] = '"';
+    input[n + 2] = '\0';
+    int pos = 0;
+    SExpr* e = read_string(input, &pos);
+    assert(e->type == SEXPR_STRING);
+    assert(strlen(e->value.string) == (size_t)n);
+    for (int i = 0; i < n; i++) assert(e->value.string[i] == 'a');
+    assert(pos == n + 2);
+    free(e->value.string);
+    free(e);
+    free(input);
+}
+
+void test_read_string_terminated() {
+    int sizes[] = { 0, 1, 254, 255, 256, 257, 300, 511, 512, 513, 2000 };
+    for (size_t i = 0; i < sizeof sizes / sizeof sizes[0]; i++) {
+        check_string_literal(sizes[i]);
+    }
+    // an escape sequence that lands on the buffer boundary
+    char input[300];
+    input[0] = '"';
+    memset(input + 1, 'b', 254);
+    strcpy(input + 255, "\\n\"");  // 254 'b's, then \n, then the closing quote
+    int pos = 0;
+    SExpr* e = read_string(input, &pos);
+    assert(strlen(e->value.string) == 255);
+    assert(e->value.string[254] == '\n');
+    printf("test_read_string_terminated passed!\n");
+}
+
 int main() {
     test_skip_whitespace();
     test_read_number();
@@ -412,6 +449,7 @@ int main() {
     test_read_unterminated_list();
     test_read_all_trailing_whitespace();
     test_read_symbol_length_limit();
+    test_read_string_terminated();
 
     // todo handle lists that have NO SPACE between each other
     //test_read_all();

@@ -104,7 +104,8 @@ SExpr *read_string(const char *input, int *pos) {
             printf("unclosed string\n");
             exit(1);
         }
-        if (i >= capacity) {
+        // grow before the buffer is full: one byte must stay free for the NUL
+        if (i + 1 >= capacity) {
             capacity *= 2;
             str = realloc(str, capacity);
             if (str == NULL) {
@@ -130,6 +131,8 @@ SExpr *read_string(const char *input, int *pos) {
         }
         c = input[++(*pos)];
     }
+    // terminate explicitly: realloc does not zero the bytes it adds
+    str[i] = '\0';
     (*pos)++; // skip '"'
     SExpr *expr = ALLOC_SEXPR();
     expr->type = SEXPR_STRING;
