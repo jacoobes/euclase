@@ -190,6 +190,11 @@ SExpr* read_list(const char* input, int* pos) {
 
     //skip any trailing whitespace in list
     char ch = skip_whitespace(input, pos);
+    if (ch != ')') {
+        // hit end of input: advancing here would walk past the NUL
+        fprintf(stderr, "Unterminated list: expected ')'\n");
+        exit(1);
+    }
     // skip the ')'
     advance(pos);
     if(!cur) {

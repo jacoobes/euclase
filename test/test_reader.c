@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include "../reader.h"
 
 void test_skip_whitespace() {
@@ -296,6 +298,32 @@ void test_sexpr_list_adj() {
 }
 
 
+// An unterminated list must be rejected with exit(1) instead of reading past
+// the end of the input (issue #5). read_list exits, so run it in a child.
+static void expect_unterminated(const char* src) {
+    pid_t pid = fork();
+    assert(pid >= 0);
+    if (pid == 0) {
+        // exact-size heap copy so sanitizers catch any read past the NUL
+        char* input = malloc(strlen(src) + 1);
+        strcpy(input, src);
+        int pos = 0;
+        read_list(input, &pos);
+        _exit(0); // not reached once the reader rejects the input
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    assert(WIFEXITED(status) && WEXITSTATUS(status) == 1);
+}
+
+void test_read_unterminated_list() {
+    expect_unterminated("((");
+    expect_unterminated("(");
+    expect_unterminated("(+ 1 2");
+    expect_unterminated("(+ 1 (- 2 1)");
+    printf("test_read_unterminated_list passed!\n");
+}
+
 int main() {
     test_skip_whitespace();
     test_read_number();
@@ -310,6 +338,7 @@ int main() {
     test_sexpr_list_adj();
     test_sexpr_list_read_all();
     test_sexpr_list_read_all2();
+    test_read_unterminated_list();
 
     // todo handle lists that have NO SPACE between each other
     //test_read_all();
