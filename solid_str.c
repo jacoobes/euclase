@@ -51,8 +51,10 @@ int solid_strcmp(const solid_str* s1, const solid_str* s2) {
  * chars will be copied.  Always NUL terminates (unless dsize == 0).
  * Returns strlen(src); if retval >= dsize, truncation occurred.
  */
+// Named solid_strlcpy, not strlcpy: macOS defines strlcpy as a fortify macro and
+// glibc >= 2.38 ships its own, so reusing the name breaks the build there.
 size_t
-strlcpy(char *dst, const char *src, size_t dsize)
+solid_strlcpy(char *dst, const char *src, size_t dsize)
 {
 	const char *osrc = src;
 	size_t nleft = dsize;
