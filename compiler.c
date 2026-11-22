@@ -537,8 +537,19 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                 else if(strcmp(symbol, "<=") == 0) {  emit_bin_op(compiler, I_LTE, rest);}
                 else if(strcmp(symbol, ">") == 0)  {   emit_bin_op(compiler, I_GT, rest);}
                 else if (strcmp(symbol, "let") == 0) { //locally scoped variables
-                    SExpr* bindings = sexpr_list_first(rest);
-                    int even = 1;
+                    if(rest == NULL) {
+                        printf("Invalid special form 'let'\n");
+                        exit(1);
+                    }
+                    SExpr* bindings = sexpr_list_first(rest); // list (a 1 b 1)
+                    if(bindings->type != SEXPR_LIST) {
+                            printf("Invalid special form 'let'. Does not have local variable declaration\n");
+                            exit(1);
+                    }
+                    if((sexpr_list_len(bindings) % 2) == 1) {
+                            printf("Uneven forms in let binding\n");
+                            exit(1);
+                    }
                     compiler_enter_scope(compiler);
 
                     SExpr* cur_exp;
@@ -548,13 +559,12 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             break;
                         }
                         SExpr* next = sexpr_list_rest(cur_exp);
-                        //if uneven forms count for let declaration
-                        if(next == NULL && (even % 2 == 1)) {
-                            printf("Uneven forms in let binding\n");
-                            exit(1);
-                        }
 
                         const SExpr* lhs = sexpr_list_first(cur_exp);
+                        if(lhs->type != SEXPR_SYMBOL) {
+                            printf("Special form 'let' must have symbol on left hand side\n");
+                            exit(1);
+                        }
                         SExpr* rhs = sexpr_list_first(next);
                         compiler_emit(compiler, rhs);
 
@@ -572,7 +582,6 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             compiler_write_byte(compiler, I_SET_LOCAL);
                             compiler_write_byte(compiler, reg);
                         }
-                        even+=1;
                         cur_exp = next;
                     }
                     SExpr* let_body = sexpr_list_rest(rest);
@@ -681,6 +690,11 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     }
                     #undef BYTE_LEN
                 } else if (strcmp(symbol, "while") == 0) {
+                    int while_bodylen = sexpr_list_len(rest);
+                    if(while_bodylen != 3) {
+                        printf("Special form 'while' error: Expected 3 expressions\n");
+                        exit(1);
+                    }
 
                     #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))

@@ -177,11 +177,60 @@ void test_var() {
     printf("test_var passed!\n");
 }
 
+// `let` binds locals: (let (name value ...) body...). Malformed binding lists
+void test_let() {
+    // malformed: must be rejected, not crash
+    assert(rejected("(let)"));              // no bindings at all
+    assert(rejected("(let (a) a)"));        // odd binding list, first pair
+    assert(rejected("(let (a 1 b) a)"));    // odd binding list, later pair
+    assert(rejected("(let (5 2) 1)"));      // name is not a symbol
+    assert(rejected("(let a 1)"));          // bindings are not a list
+    printf("  let: malformed forms rejected\n");
+
+    // well-formed
+    assert(run_and_get_r("(var r (let (a 1) a)) r") == 1);
+    assert(run_and_get_r("(var r (let (a 1 b 2) (+ a b))) r") == 3);
+    // a later binding can use an earlier one
+    assert(run_and_get_r("(var r (let (a 2 b (+ a 3)) b)) r") == 5);
+    // nested lets, and the body's last form is the value
+    assert(run_and_get_r("(var r (let (a 1) (let (b 10) (+ a b)))) r") == 11);
+    assert(run_and_get_r("(var r (let (a 1) 5 a)) r") == 1);
+    printf("  let: well-formed ok\n");
+
+    printf("test_let passed!\n");
+}
+
+// `while` loops: (while cond body...). A missing condition must be a compile
+void test_while() {
+    assert(rejected("(while)"));
+    printf("  while: malformed form rejected\n");
+
+    // sum 5 + 4 + 3 + 2 + 1
+    assert(run_and_get_r("(var r (let (i 5 s 0) (while i (@s (+ s i)) (@i (- i 1))) s)) r") == 15);
+    // a false condition never runs the body
+    assert(run_and_get_r("(var r (let (s 1) (while 0 (@s 99)) s)) r") == 1);
+    printf("  while: well-formed ok\n");
+
+    printf("test_while passed!\n");
+}
+
+// A loop must not grow the operand stack on every iteration. Today the body
+// re-emits the condition and nothing pops the body's values, so a few hundred
+// iterations overflow the 256-slot stack (issue #11). Runs last so it does not
+// hide the results above.
+void test_while_stack_balance() {
+    assert(run_and_get_r("(var r (let (i 300) (while i (@i (- i 1))) 7)) r") == 7);
+    printf("test_while_stack_balance passed!\n");
+}
+
 int main() {
     test_let_duplicate_binding();
     test_if_arity();
     test_and();
     test_var();
+    test_let();
+    test_while();
+    test_while_stack_balance();
     printf("All tests passed!\n");
     return 0;
 }
