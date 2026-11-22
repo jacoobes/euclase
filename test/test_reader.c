@@ -349,6 +349,52 @@ void test_read_all_trailing_whitespace() {
     printf("test_read_all_trailing_whitespace passed!\n");
 }
 
+// Symbols are capped at 255 characters (the 256-byte buffer minus the NUL).
+// Longer input must be rejected with exit(1) instead of writing past the buffer
+// (issue #6).
+static char* make_symbol(int n) {
+    char* s = malloc(n + 1);
+    memset(s, 'a', n);
+    s[n] = '\0';
+    return s;
+}
+
+static int read_symbol_in_child(int n) {
+    fflush(stdout);
+    pid_t pid = fork();
+    assert(pid >= 0);
+    if (pid == 0) {
+        char* input = make_symbol(n);
+        int pos = 0;
+        read_symbol(input, &pos);
+        _exit(0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return status;
+}
+
+void test_read_symbol_length_limit() {
+    // the longest allowed symbol reads back intact and NUL-terminated
+    char* input = make_symbol(255);
+    int pos = 0;
+    SExpr* e = read_symbol(input, &pos);
+    assert(e->type == SEXPR_SYMBOL);
+    assert(strlen(e->value.symbol) == 255);
+    assert(strcmp(e->value.symbol, input) == 0);
+    assert(pos == 255);
+    free(input);
+
+    int st = read_symbol_in_child(255);
+    assert(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    // one character too many, and far too many, are both rejected
+    st = read_symbol_in_child(256);
+    assert(WIFEXITED(st) && WEXITSTATUS(st) == 1);
+    st = read_symbol_in_child(300);
+    assert(WIFEXITED(st) && WEXITSTATUS(st) == 1);
+    printf("test_read_symbol_length_limit passed!\n");
+}
+
 int main() {
     test_skip_whitespace();
     test_read_number();
@@ -365,6 +411,7 @@ int main() {
     test_sexpr_list_read_all2();
     test_read_unterminated_list();
     test_read_all_trailing_whitespace();
+    test_read_symbol_length_limit();
 
     // todo handle lists that have NO SPACE between each other
     //test_read_all();
