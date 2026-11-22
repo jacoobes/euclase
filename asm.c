@@ -122,7 +122,7 @@ int asm_compile(Assembler* a, const char* source) {
     while (pos < strlen(source) && source[pos] != '\0') {
         while(isspace(source[pos])) { pos++; }
         if (source[pos] == ';') {
-            while(source[pos] != '\n') pos++;
+            while(source[pos] != '\0' && source[pos] != '\n') pos++;
             continue;
         }
         
