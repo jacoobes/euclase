@@ -10,7 +10,7 @@ static TableEntry* find_entry(TableEntry* entries, int capacity, vm_string* k) {
     for(;;) {
         TableEntry* entry = &entries[index]; 
         if(entry->key == NULL) {
-            if (entry->value.type == LVAL_NUM && AS_NUM(entry->value) == TABLE_TOMBSTONE) {
+            if (entry->value.type == LVAL_NUM && AS_NUM(entry->value) == TABLE_EMPTY) {
                 // Empty entry.
                 return tombstone != NULL ? tombstone : entry;
             } else {
@@ -29,11 +29,11 @@ static void adjust_capacity (HashTable* tbl, int capacity) {
     TableEntry* new_entries = calloc(sizeof(TableEntry), capacity);
     for(int i = 0; i < capacity; i++) {
         new_entries[i].key = NULL;
-        new_entries[i].value = lobj_num(TABLE_TOMBSTONE);
+        new_entries[i].value = lobj_num(TABLE_EMPTY);
     }
     tbl->count = 0;
     if (tbl->entries) {
-        for(int i = 0; i < capacity; i++) {
+        for(int i = 0; i < tbl->capacity; i++) {
             const TableEntry* old_entry = &tbl->entries[i];
             if (old_entry->key == NULL) {
                 continue;
@@ -68,7 +68,7 @@ int table_set(HashTable* tbl, vm_string* k, const lobj v) {
     TableEntry* maybe_entry = find_entry(tbl->entries, tbl->capacity, k);
     const int isNewKey = maybe_entry->key == NULL;
     //increase table count
-    if (isNewKey && (IS_NUM(maybe_entry->value) && AS_NUM(maybe_entry->value) == TABLE_TOMBSTONE)) tbl->count++;
+    if (isNewKey && (IS_NUM(maybe_entry->value) && AS_NUM(maybe_entry->value) == TABLE_EMPTY)) tbl->count++;
     
     maybe_entry->key=k;
     maybe_entry->value=v;
@@ -111,7 +111,7 @@ vm_string* table_find_string(HashTable* table, const char* ss, uint32_t hash) {
   for (;;) {
     TableEntry* entry = &table->entries[index];
     if (entry->key == NULL) {
-      if(AS_NUM(entry->value) == TABLE_TOMBSTONE) { 
+      if(AS_NUM(entry->value) == TABLE_EMPTY) { 
             //printf("tombstone");
             return NULL;
       }
@@ -120,7 +120,7 @@ vm_string* table_find_string(HashTable* table, const char* ss, uint32_t hash) {
       // We found it.
       return entry->key;
     } else {
-        printf("%s\n", SOLID_STR_TO_C(entry->key->contents));
+        //printf("%s\n", SOLID_STR_TO_C(entry->key->contents));
         //printf("?!");
     }
     index = (index + 1) % table->capacity;

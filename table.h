@@ -10,7 +10,11 @@
 // We don’t grow when the capacity is completely full.
 // Instead, we grow the array before then, when the array becomes at least 75% full.
 #define TABLE_MAX_LOAD 0.75
-#define TABLE_TOMBSTONE 0
+// A slot with a NULL key holds one of these markers as a number value:
+// never used, or deleted. A deleted slot (tombstone) must stay distinct from
+// an empty one so probing continues past it to keys stored further along.
+#define TABLE_EMPTY 0
+#define TABLE_TOMBSTONE 1
 
 typedef struct TableEntry {
     vm_string* key;
