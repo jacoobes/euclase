@@ -1,16 +1,14 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include "../solid_str.h"
 // Assuming these are defined in your header file
 
 void test_solid_str_new() {
     printf("Testing solid_str_new...\n");
-    
-    // Test with NULL input
-    solid_str s1 = solid_str_new(NULL);
-    assert(solid_strlen(&s1) == 0);
-    solid_str_free(&s1);
     
     // Test with empty string
     solid_str s2 = solid_str_new("");
@@ -223,6 +221,56 @@ void test_solid_str_indexoob() {
     printf("solid_str_oob tests passed!\n");
 }
 
+// Misuse of the API must stop the process at the check, not corrupt memory
+// (issue #16). Each case runs in a child so the test itself survives.
+static int run_in_child(void (*fn)(void)) {
+    fflush(stdout);
+    pid_t pid = fork();
+    assert(pid >= 0);
+    if (pid == 0) {
+        fn();
+        _exit(0); // not reached when the check fires
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return status;
+}
+
+static void new_null(void) { solid_str_new(NULL); }
+static void append_self(void) {
+    solid_str s = solid_str_new("hello");
+    solid_str_appends(&s, SOLID_STR_TO_C(s));
+}
+static void append_own_suffix(void) {
+    solid_str s = solid_str_new("hello");
+    solid_str_appends(&s, SOLID_STR_TO_C(s) + 3);
+}
+static void subs_start_after_end(void) {
+    solid_str s = solid_str_new("hello");
+    solid_str_subs(&s, 2, 1);
+}
+static void subs_start_far_after_end(void) {
+    solid_str s = solid_str_new("hello");
+    solid_str_subs(&s, 3, 1); // used to loop forever
+}
+
+void test_solid_str_misuse() {
+    int st;
+    // asserts abort the process
+    st = run_in_child(new_null);
+    assert(WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT);
+    st = run_in_child(append_self);
+    assert(WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT);
+    st = run_in_child(append_own_suffix);
+    assert(WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT);
+    // start > end is reported and exits with status 1
+    st = run_in_child(subs_start_after_end);
+    assert(WIFEXITED(st) && WEXITSTATUS(st) == 1);
+    st = run_in_child(subs_start_far_after_end);
+    assert(WIFEXITED(st) && WEXITSTATUS(st) == 1);
+    printf("solid_str_misuse tests passed!\n");
+}
+
 int main() {
     printf("Running solid_str tests...\n\n");
     
@@ -236,6 +284,7 @@ int main() {
     test_solid_str_subs4();
     test_solid_str_subs5();
     test_solid_str_indexoob();
+    test_solid_str_misuse();
     printf("\nAll tests passed successfully!\n");
     return 0;
 }

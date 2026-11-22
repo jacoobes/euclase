@@ -1,5 +1,6 @@
 #include "solid_str.h"
 #include <stdio.h>
+#include <assert.h>
 
 uint32_t hash_str(const char* key, int length) {
   uint32_t hash = 2166136261u;
@@ -11,16 +12,13 @@ uint32_t hash_str(const char* key, int length) {
 }
 
 solid_str solid_str_new(const char* startbuf) {
+    // NULL is not accepted: pass "" for an empty string
+    assert(startbuf != NULL);
     darray_char s = darray_new();
-    if(startbuf == NULL) {
-        unsigned long ha = hash_str(startbuf, 0);
-        return (solid_str){.length=0,  .vec=s, .hash=ha };
-    } else {
-        int len = strlen(startbuf);
-        unsigned long ha = hash_str(startbuf, len);
-        darray_append_items_nullterminate(s, startbuf, len);
-        return (solid_str){ .length=len, .vec=s, .hash=ha };
-    }
+    int len = strlen(startbuf);
+    unsigned long ha = hash_str(startbuf, len);
+    darray_append_items_nullterminate(s, startbuf, len);
+    return (solid_str){ .length=len, .vec=s, .hash=ha };
 }
 
 void solid_str_free(solid_str* s) {
@@ -29,6 +27,8 @@ void solid_str_free(solid_str* s) {
 
 
 void solid_str_appends(solid_str* s, char* cs) {
+    // self-append is unsupported: growing s can move its buffer and leave cs dangling
+    assert(s->vec.item == NULL || cs < s->vec.item || cs > s->vec.item + s->length);
     darray_append_items_nullterminate(s->vec, cs, strlen(cs));
     s->length+=strlen(cs);
     s->hash=hash_str(s->vec.item, s->length);
@@ -51,6 +51,10 @@ solid_str solid_str_subs(solid_str* s1, int start, int end) {
     int s_end = end;
     if(s_end == -1) {
         s_end = slen;
+    }
+    if(start > s_end) {
+        printf("Start is greater than end. Got start:%d end:%d\n", start, end);
+        exit(1);
     }
     // if start is less than length of str and 
     // end less than length of str, it is valid in range

@@ -339,7 +339,7 @@ static void closeUpvalues(VM* vm, lobj* last) {
  * Returns a heap allocated string of stack trace.
  */
 solid_str vm_stacktrace(VM* vm, char* error) {
-    solid_str stack_trace = solid_str_new(NULL);
+    solid_str stack_trace = solid_str_new("");
     printf("Error: stacktrace(frames=%d)\n", vm->frame_count);
     for(int i = 0; i < vm->frame_count; i++) {
         solid_str fnname = AS_STR(vm->call_stack[i].closure->fn->name)->contents;
