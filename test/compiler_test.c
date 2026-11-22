@@ -155,10 +155,33 @@ void test_and() {
     printf("test_and passed!\n");
 }
 
+// `var` defines a global: (var name value). A missing name, a non-symbol
+// name or a missing value must be a compile error, not a crash (issue #8).
+void test_var() {
+    // malformed: must be rejected, not crash
+    assert(rejected("(var)"));
+    assert(rejected("(var a)"));
+    assert(rejected("(var 5 1)"));
+    assert(rejected("(var \"a\" 1)"));
+    printf("  var: malformed forms rejected\n");
+
+    // well-formed
+    assert(run_and_get_r("(var r 5) r") == 5);
+    assert(run_and_get_r("(var r (+ 1 2)) r") == 3);
+    // redefining a global replaces its value
+    assert(run_and_get_r("(var r 1) (var r 2) r") == 2);
+    // the value can refer to another global
+    assert(run_and_get_r("(var a 4) (var r (+ a 1)) r") == 5);
+    printf("  var: well-formed ok\n");
+
+    printf("test_var passed!\n");
+}
+
 int main() {
     test_let_duplicate_binding();
     test_if_arity();
     test_and();
+    test_var();
     printf("All tests passed!\n");
     return 0;
 }
