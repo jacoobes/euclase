@@ -1,6 +1,9 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include "../reader.h"
 #include "../compiler.h"
 #include "../table.h"
@@ -50,8 +53,51 @@ void test_let_duplicate_binding() {
     printf("test_let_duplicate_binding passed!\n");
 }
 
+// Compile `src` in a child process and return its wait status. Used for
+// programs the compiler must reject with exit(1) rather than crash on.
+static int compile_in_child(const char* src) {
+    fflush(stdout);
+    pid_t pid = fork();
+    assert(pid >= 0);
+    if (pid == 0) {
+        size_t count;
+        SExpr** exprs = read_all(src, &count);
+        HashTable globals, strings;
+        table_create(&globals);
+        table_create(&strings);
+        Compiler compiler;
+        compiler_create(&compiler, &globals, &strings);
+        for (size_t i = 0; i < count; i++) compiler_emit(&compiler, exprs[i]);
+        _exit(0); // compiled without error
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return status;
+}
+
+static int rejected(const char* src) {
+    int st = compile_in_child(src);
+    return WIFEXITED(st) && WEXITSTATUS(st) == 1;
+}
+
+// `if` needs exactly a condition, a then-branch and an else-branch. Anything
+// else must be a compile error, not a NULL dereference (issue #8).
+void test_if_arity() {
+    assert(rejected("(if)"));
+    assert(rejected("(if 1)"));
+    assert(rejected("(if 1 2)"));        // no else branch
+    assert(rejected("(if 1 2 3 4)"));    // extra expression
+    // well-formed if still compiles and picks the right branch
+    int st = compile_in_child("(if 1 2 3)");
+    assert(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    assert(run_and_get_r("(var r (if 1 10 20)) r") == 10);
+    assert(run_and_get_r("(var r (if 0 10 20)) r") == 20);
+    printf("test_if_arity passed!\n");
+}
+
 int main() {
     test_let_duplicate_binding();
+    test_if_arity();
     printf("All tests passed!\n");
     return 0;
 }

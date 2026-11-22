@@ -598,12 +598,21 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_write_byte(compiler, I_SET_GLOBAL);
                     compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
-
                     #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))
 
+                    int if_len = sexpr_list_len(rest);
+
+                    if(if_len != 3) {
+                        printf("Special form 'if' error: Expected 3 expressions");
+                        exit(1);
+                    }
+
+
+                    SExpr* condition = sexpr_list_first(rest);
+
                     //condition
-                    compiler_emit(compiler, sexpr_list_first(rest));
+                    compiler_emit(compiler, condition);
                     // emit a jmp if falsy
                     const int ushort_start = compiler_jump_emit(compiler, I_JMP_FALSY);
                     // we get the length of bytes after jmp emitted,
