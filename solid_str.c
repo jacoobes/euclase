@@ -46,38 +46,6 @@ int solid_strcmp(const solid_str* s1, const solid_str* s2) {
     return strcmp(SOLID_STR_TO_C(*s1), SOLID_STR_TO_C(*s2));
 }
 
-/*
- * Copy string src to buffer dst of size dsize.  At most dsize-1
- * chars will be copied.  Always NUL terminates (unless dsize == 0).
- * Returns strlen(src); if retval >= dsize, truncation occurred.
- */
-// Named solid_strlcpy, not strlcpy: macOS defines strlcpy as a fortify macro and
-// glibc >= 2.38 ships its own, so reusing the name breaks the build there.
-size_t
-solid_strlcpy(char *dst, const char *src, size_t dsize)
-{
-	const char *osrc = src;
-	size_t nleft = dsize;
-
-	/* Copy as many bytes as will fit. */
-	if (nleft != 0) {
-		while (--nleft != 0) {
-			if ((*dst++ = *src++) == '\0')
-				break;
-		}
-	}
-
-	/* Not enough room in dst, add NUL and traverse rest of src. */
-	if (nleft == 0) {
-		if (dsize != 0)
-			*dst = '\0';		/* NUL-terminate dst */
-		while (*src++)
-			;
-	}
-
-	return(src - osrc - 1);	/* count does not include NUL */
-}
-
 solid_str solid_str_subs(solid_str* s1, int start, int end) {
     int slen = s1->length;
     int s_end = end;
