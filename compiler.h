@@ -6,6 +6,8 @@
 #include "reader.h"
 
 #define UINT8_COUNT (UINT8_MAX + 1)
+// most arguments a function call accepts; `and` uses the same operand limit
+#define MAX_ARGS 256
 
 typedef struct Local {
     solid_str name;

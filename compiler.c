@@ -637,24 +637,36 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
 
                     #undef BYTE_LEN
                 } else if (strcmp(symbol, "and") == 0) {
-                    // evaluate first. if false, evaluate second one
+
+                    int and_len = sexpr_list_len(rest); // rest = (1 2)
+                    if(and_len < 2 || and_len > MAX_ARGS) {
+                        printf("Special form 'and' error: Expected 2 to %d expressions\n", MAX_ARGS);
+                        exit(1);
+                    }
+                    // (and a b c): evaluate operands left to right. After each one but
+                    // the last, jump to the end if it is falsy, leaving it on the stack
+                    // as the result; otherwise pop it and evaluate the next one.
                     #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))
 
-                    // emit first
+                    // one jump per operand except the last; the guard above keeps
+                    // jump_count below MAX_ARGS, so these arrays cannot overflow
+                    int jumps[MAX_ARGS - 1];
+                    int jump_ends[MAX_ARGS - 1];
+                    int jump_count = 0;
+
                     compiler_emit(compiler, sexpr_list_first(rest));
-
-                    const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY);
-                    const int cur_size = BYTE_LEN;
-
-                    rest = sexpr_list_rest(rest);
-                    // emit second
-                    compiler_emit(compiler, sexpr_list_first(rest));
-
-                    const size_t cur_location = BYTE_LEN - cur_size;
-
-                    compiler_jump_patch(compiler, ushort_begin, cur_location);
-
+                    for (SExpr* next = sexpr_list_rest(rest); next != NULL && sexpr_list_first(next) != NULL;
+                         next = sexpr_list_rest(next)) {
+                        jumps[jump_count] = compiler_jump_emit(compiler, I_JMP_FALSY);
+                        jump_ends[jump_count] = BYTE_LEN; // offsets are measured from after the jump
+                        jump_count++;
+                        compiler_write_byte(compiler, I_POP); // I_JMP_FALSY only peeks
+                        compiler_emit(compiler, sexpr_list_first(next));
+                    }
+                    for (int j = 0; j < jump_count; j++) {
+                        compiler_jump_patch(compiler, jumps[j], BYTE_LEN - jump_ends[j]);
+                    }
                     #undef BYTE_LEN
                 } else if (strcmp(symbol, "while") == 0) {
 
@@ -693,7 +705,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                 } else {
                     // if its none of the compiler specials, we assume it's a function call.
                     const int argc = sexpr_list_len(rest);
-                    if(argc > 256) {
+                    if(argc > MAX_ARGS) {
                         printf("Too many arguments!\n");
                         exit(1);
                     }

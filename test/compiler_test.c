@@ -95,9 +95,70 @@ void test_if_arity() {
     printf("test_if_arity passed!\n");
 }
 
+// Build "(var r (let (x 1) (and x x ... x L))) r" with n operands, the last
+// one being the literal L. The operands read a local rather than repeating the
+// literal 1, so the long form does not fill the constant pool (see #10).
+static char* and_of_ones(int n, int last) {
+    char* src = malloc(64 + 2 * n);
+    char* p = src + sprintf(src, "(var r (let (x 1) (and");
+    for (int i = 0; i < n - 1; i++) p += sprintf(p, " x");
+    sprintf(p, " %d))) r", last);
+    return src;
+}
+
+// `and` short-circuits: it yields the first falsy operand (0), otherwise the
+// last operand. It takes 2 up to MAX_ARGS operands (the function call limit);
+// any other count is a compile error (issue #8).
+void test_and() {
+    // wrong operand count: must be rejected, not crash
+    assert(rejected("(and)"));
+    assert(rejected("(and 1)"));
+    // one more operand than the limit
+    char* too_many = and_of_ones(MAX_ARGS + 1, 1);
+    assert(rejected(too_many));
+    free(too_many);
+
+    // two operands
+    assert(run_and_get_r("(var r (and 1 2)) r") == 2);
+    assert(run_and_get_r("(var r (and 0 2)) r") == 0);
+    assert(run_and_get_r("(var r (and 1 0)) r") == 0);
+    assert(run_and_get_r("(var r (and 0 0)) r") == 0);
+    printf("  and: two operands ok\n");
+
+    // short-circuit: the second operand is not evaluated when the first is
+    // falsy (calling the undefined `nope` would be a runtime error)
+    assert(run_and_get_r("(var r (and 0 (nope))) r") == 0);
+    printf("  and: short-circuit ok\n");
+
+    // leaves exactly one value on the stack: as a call argument, an extra
+    // value would shift the callee and argument slots
+    assert(run_and_get_r("(fn (id (x)) x) (var r (id (and 1 2))) r") == 2);
+    assert(run_and_get_r("(fn (id (x)) x) (var r (id (and 0 2))) r") == 0);
+    printf("  and: stack balance ok\n");
+
+    // more than two operands: every operand takes part
+    assert(run_and_get_r("(var r (and 1 2 3)) r") == 3);
+    assert(run_and_get_r("(var r (and 1 1 0)) r") == 0);
+    assert(run_and_get_r("(var r (and 1 2 3 4)) r") == 4);
+    assert(run_and_get_r("(var r (and 1 2 0 4)) r") == 0);
+    printf("  and: several operands ok\n");
+
+    // exactly the limit compiles and runs; a falsy last operand still counts
+    char* at_limit = and_of_ones(MAX_ARGS, 1);
+    assert(run_and_get_r(at_limit) == 1);
+    free(at_limit);
+    at_limit = and_of_ones(MAX_ARGS, 0);
+    assert(run_and_get_r(at_limit) == 0);
+    free(at_limit);
+    printf("  and: %d operands ok\n", MAX_ARGS);
+
+    printf("test_and passed!\n");
+}
+
 int main() {
     test_let_duplicate_binding();
     test_if_arity();
+    test_and();
     printf("All tests passed!\n");
     return 0;
 }
