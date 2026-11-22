@@ -324,6 +324,31 @@ void test_read_unterminated_list() {
     printf("test_read_unterminated_list passed!\n");
 }
 
+// Input that ends in whitespace or a comment must parse cleanly without
+// reading past the end of the buffer (issue #4).
+static size_t count_exprs(const char* src) {
+    // exact-size heap copy so sanitizers catch any read past the NUL
+    char* input = malloc(strlen(src) + 1);
+    strcpy(input, src);
+    size_t count = 99;
+    read_all(input, &count);
+    free(input);
+    return count;
+}
+
+void test_read_all_trailing_whitespace() {
+    assert(count_exprs("(+ 1 2)\n") == 1);
+    assert(count_exprs("(+ 1 2) ") == 1);
+    assert(count_exprs("(+ 1 2)\n\n(+ 3 4)\n") == 2);
+    assert(count_exprs("(+ 1 2) ; comment\n") == 1);
+    assert(count_exprs("(+ 1 2) ; comment") == 1);
+    assert(count_exprs("42\n") == 1);
+    assert(count_exprs("\n") == 0);
+    assert(count_exprs("  \t\n ") == 0);
+    assert(count_exprs("") == 0);
+    printf("test_read_all_trailing_whitespace passed!\n");
+}
+
 int main() {
     test_skip_whitespace();
     test_read_number();
@@ -339,6 +364,7 @@ int main() {
     test_sexpr_list_read_all();
     test_sexpr_list_read_all2();
     test_read_unterminated_list();
+    test_read_all_trailing_whitespace();
 
     // todo handle lists that have NO SPACE between each other
     //test_read_all();

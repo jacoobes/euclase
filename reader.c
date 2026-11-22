@@ -210,6 +210,8 @@ SExpr **read_all(const char *input, size_t *count) {
     int i = 0;
     while (i < strlen(input)) {
         char cur = skip_whitespace(input, &i);
+        // only whitespace was left: stop here, read_atom would peek past the NUL
+        if (cur == '\0') break;
         //printf("%c %d\n", cur, i);
         if (cur == ';') {
             while (input[i] != '\0' && input[i] != '\n') i++;
