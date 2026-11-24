@@ -68,6 +68,47 @@ void test_read_symbol() {
     assert(expr->value.number == 0);
     free_sexpr(expr);
 
+
+    pos = 0;
+    expr = read_symbol("false", &pos);
+    assert(expr != NULL);
+    assert(expr->type == SEXPR_NUMBER);  // false is interpreted as a number (0)
+    assert(expr->value.number == 0);
+    free_sexpr(expr);
+
+
+    pos = 0;
+    expr = read_symbol("?false", &pos);
+    assert(expr != NULL);
+    assert(expr->type == SEXPR_SYMBOL);  // false is interpreted as a number (0)
+    assert(strcmp(expr->value.symbol, "?false") == 0);
+    free_sexpr(expr);
+
+    pos = 0;
+    expr = read_symbol("prime?", &pos);
+    assert(expr != NULL);
+    assert(expr->type == SEXPR_SYMBOL);  // false is interpreted as a number (0)
+    assert(strcmp(expr->value.symbol, "prime?") == 0);
+    free_sexpr(expr);
+
+
+    pos = 0;
+    expr = read_symbol("prime?prime", &pos);
+    assert(expr != NULL);
+    assert(expr->type == SEXPR_SYMBOL);  // false is interpreted as a number (0)
+    assert(strcmp(expr->value.symbol, "prime?prime") == 0);
+    free_sexpr(expr);
+
+
+
+    pos = 0;
+    expr = read_symbol("?", &pos);
+    assert(expr != NULL);
+    assert(expr->type == SEXPR_SYMBOL);  // false is interpreted as a number (0)
+    assert(strcmp(expr->value.symbol, "?") == 0);
+    free_sexpr(expr);
+
+
     printf("test_read_symbol passed!\n");
 }
 
