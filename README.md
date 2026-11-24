@@ -5,8 +5,6 @@
 
 
 ## TODO
-
-- garbage collection (priority)
 - modules
 - standard library
 
