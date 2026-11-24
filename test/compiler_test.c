@@ -163,6 +163,7 @@ void test_var() {
     assert(rejected("(var a)"));
     assert(rejected("(var 5 1)"));
     assert(rejected("(var \"a\" 1)"));
+    assert(rejected("(var a 1 2)"));     // extra value
     printf("  var: malformed forms rejected\n");
 
     // well-formed

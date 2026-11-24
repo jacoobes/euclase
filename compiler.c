@@ -617,8 +617,8 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         printf("For var declaration, expected symbol");
                         exit(1);
                     }
-                    if (sexpr_list_rest(rest) == NULL) {
-                        printf("For var declaration, expected a value");
+                    if (sexpr_list_len(rest) != 2) {
+                        printf("For var declaration, expected exactly a name and one value");
                         exit(1);
                     }
                     SExpr* value = sexpr_list_first(sexpr_list_rest(rest));
