@@ -225,6 +225,83 @@ void test_while_stack_balance() {
     printf("test_while_stack_balance passed!\n");
 }
 
+// Compile and run `src` in a child process. Returns 1 if the program was
+// refused, either by the compiler (exit 1) or with a runtime error (vm_exec
+// returning non-zero); 0 if it ran cleanly; crashes fail the assert.
+static int fails(const char* src) {
+    fflush(stdout);
+    pid_t pid = fork();
+    assert(pid >= 0);
+    if (pid == 0) {
+        size_t count;
+        SExpr** exprs = read_all(src, &count);
+        HashTable globals, strings;
+        table_create(&globals);
+        table_create(&strings);
+        Compiler compiler;
+        compiler_create(&compiler, &globals, &strings);
+        for (size_t i = 0; i < count; i++) compiler_emit(&compiler, exprs[i]);
+        CompileUnit* main_fn = compiler.current_unit;
+        darray_push(main_fn->bytes, I_RETURN);
+        lobj main = compile_unit_get_closure(main_fn);
+        compiler_destroy(&compiler);
+        static VM vm;
+        vm_create(&vm, &globals, &strings);
+        _exit(vm_exec(&vm, &main, 0) != 0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    assert(WIFEXITED(status)); // a crash is never an acceptable answer
+    return WEXITSTATUS(status) == 1;
+}
+
+// `@name value` assigns to an existing local, upvalue or global and yields the
+// value. A missing name or value must be a compile error, not a crash (#8).
+void test_assign() {
+    // malformed: must be rejected, not crash
+    assert(rejected("(@)"));          // no name
+    assert(rejected("(@a)"));         // no value
+    assert(rejected("(@a 1 2)"));     // extra value
+    printf("  @: malformed forms rejected\n");
+
+    // assigning to a name that was never defined is an error, at compile time
+    // or at run time, rather than silently creating a global
+    assert(fails("(@nope 5)"));
+    assert(fails("(fn (f ()) (@nope 5)) (f)"));
+    printf("  @: unknown name rejected\n");
+
+    // globals are immutable (README, "Reassigning local variables"), so @ on a
+    // global is an error, at top level or from inside a function
+    assert(fails("(var g 1) (@g 7)"));
+    assert(fails("(var g 1) (fn (set ()) (@g 9)) (set)"));
+    printf("  @: global assignment rejected\n");
+
+    // locals
+    assert(run_and_get_r("(var r (let (a 1) (@a 5) a)) r") == 5);
+    assert(run_and_get_r("(var r (let (a 1) (@a (+ a 10)) a)) r") == 11);
+
+    // upvalues: a closure keeps updating the variable it captured
+    assert(run_and_get_r(
+        "(fn (mk ()) (let (c 0) (fn (inc ()) (@c (+ c 1))) inc))"
+        "(var i (mk)) (i) (var r (i)) r") == 2);
+    printf("  @: locals and upvalues ok\n");
+
+    printf("test_assign passed!\n");
+}
+
+// `@` is an expression: it yields the assigned value, for locals and for
+// upvalues, so it can be used inside a larger expression.
+void test_assign_value() {
+    assert(run_and_get_r("(var r (let (a 1) (+ 1 (@a 5)))) r") == 6);
+    assert(run_and_get_r(
+        "(fn (mk ()) \
+            (let (c 0) \
+                (fn (inc ())  \
+                    (+ 100 (@c (+ c 1)))) inc))"
+        "(var i (mk)) (i) (var r (i)) r") == 102);
+    printf("test_assign_value passed!\n");
+}
+
 int main() {
     test_let_duplicate_binding();
     test_if_arity();
@@ -233,6 +310,8 @@ int main() {
     test_let();
     test_while();
     test_while_stack_balance();
+    test_assign();
+    test_assign_value();
     printf("All tests passed!\n");
     return 0;
 }

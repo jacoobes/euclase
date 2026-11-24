@@ -317,7 +317,6 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
 #endif
         return -1;
     }
-    //printf("resolving %s in %s\n", symbol, cu->name);
     const LocalChart* enclosing_localchart = cu->enclosing->locals_chart;
     const int result = localchart_resolve_symbol(enclosing_localchart, symbol);
     if (result != -1) { // if it is not a local
@@ -609,11 +608,10 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     }
                     SExpr* value = sexpr_list_first(sexpr_list_rest(rest));
 
-
                     compiler_emit(compiler,value);
                     
-                    vm_string* vms = compiler_fetch_string(compiler, varname->value.symbol);
-                    const int str_loc = compiler_add_const(compiler, into_lobj(vms));
+                    vm_string* vm_str = compiler_fetch_string(compiler, varname->value.symbol);
+                    const int str_loc = compiler_add_const(compiler, into_lobj(vm_str));
                     compiler_write_byte(compiler, I_SET_GLOBAL);
                     compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
@@ -626,9 +624,6 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
 
                     #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))
-
-                    
-
 
                     SExpr* condition = sexpr_list_first(rest);
 
@@ -719,6 +714,21 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
 
                 } else if(symbol[0] == '@')  {
                     char* ident = symbol+1;
+                    if(ident[0] == '\0') {
+                        printf("Expected a symbol after '@' \n");
+                        exit(1);
+                    }
+                    if(sexpr_list_len(rest) != 1) {
+                        printf("special form needs 1 element to assign '@' \n");
+                        exit(1);
+                    }
+
+                    if (localchart_resolve_symbol(compiler->current_unit->locals_chart, ident) == -1
+                     && resolve_upvalue(compiler->current_unit, ident) == -1) {
+                        printf("Could not resolve symbol %s to assign value\n", ident);
+                        exit(1);
+                    }
+
                     compiler_emit(compiler, sexpr_list_first(rest));
                     compiler_rebind_localsymbol(compiler, ident);
                 } else {
