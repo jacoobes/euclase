@@ -169,6 +169,7 @@ void test_var() {
     // well-formed
     assert(run_and_get_r("(var r 5) r") == 5);
     assert(run_and_get_r("(var r (+ 1 2)) r") == 3);
+    assert(run_and_get_r("(var r (% 7 3)) r") == 1); // #40
     // redefining a global replaces its value
     assert(run_and_get_r("(var r 1) (var r 2) r") == 2);
     // the value can refer to another global

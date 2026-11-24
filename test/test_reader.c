@@ -153,6 +153,14 @@ void test_read_atom() {
     assert(strcmp(expr3->value.string, "abcdefg") == 0);
     free_sexpr(expr3);
 
+    // % must read as a symbol so the modulo operator is usable (#40)
+    int pos4 = 0;
+    SExpr *expr4 = read_atom("%", &pos4);
+    assert(expr4 != NULL);
+    assert(expr4->type == SEXPR_SYMBOL);
+    assert(strcmp(expr4->value.symbol, "%") == 0);
+    free_sexpr(expr4);
+
 }
 
 void test_read_list() {
