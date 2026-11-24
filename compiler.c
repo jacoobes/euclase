@@ -178,8 +178,13 @@ vm_string* compiler_fetch_string(const Compiler* compiler, const char* symbol) {
 int compiler_add_const(const Compiler *compiler, const lobj value) {
     CompileUnit* cu = compiler->current_unit;
 
+
+
     // if is string, try to find cached string of same hash and contents
     darray_push(cu->constants, value);
+
+
+    // the size of array before pushing
     return darray_size(cu->constants)-1;
 }
 
@@ -312,7 +317,6 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
 #endif
         return -1;
     }
-    //printf("resolving %s in %s\n", symbol, cu->name);
     const LocalChart* enclosing_localchart = cu->enclosing->locals_chart;
     const int result = localchart_resolve_symbol(enclosing_localchart, symbol);
     if (result != -1) { // if it is not a local
@@ -435,15 +439,28 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     exit(0);
                 }
                 if(strcmp(symbol, "fn") == 0) {
-                    SExpr* fn_def = sexpr_list_first(rest); // '(name (a b))
+                    // (fn (name (args...)) body...): check the shape before reading any part
+                    SExpr* fn_def = rest == NULL ? NULL : sexpr_list_first(rest); // '(name (a b))
+                    if(fn_def == NULL || fn_def->type != SEXPR_LIST) {
+                        printf("Special form 'fn' error: expected (fn (name (args...)) body...)\n");
+                        exit(1);
+                    }
                     const SExpr* fn_name = sexpr_list_first(fn_def); // "name"
-                    SExpr* args = sexpr_list_first(sexpr_list_rest(fn_def)); // (a b)
-                    SExpr* body = sexpr_list_rest(rest); // '(+ a b)
-
-                    if(fn_name->type != SEXPR_SYMBOL) {
+                    if(fn_name == NULL || fn_name->type != SEXPR_SYMBOL) {
                         printf("fnname must be a simple symbol\n");
                         exit(1);
                     }
+                    SExpr* args_cell = sexpr_list_rest(fn_def);
+                    SExpr* args = args_cell == NULL ? NULL : sexpr_list_first(args_cell); // (a b)
+                    if(args == NULL || args->type != SEXPR_LIST) {
+                        printf("Special form 'fn' error: expected an argument list after '%s'\n", fn_name->value.symbol);
+                        exit(1);
+                    }
+                    if(sexpr_list_rest(args_cell) != NULL) {
+                        printf("Special form 'fn' error: expected only a name and an argument list in (%s ...)\n", fn_name->value.symbol);
+                        exit(1);
+                    }
+                    SExpr* body = sexpr_list_rest(rest); // '(+ a b)
 #ifdef DEBUG_COMPILER
                     printf("emitting fn: '%s'\n", fn_name->value.symbol);
 #endif
@@ -467,11 +484,13 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             break;
                         }
                         if(el->type != SEXPR_SYMBOL) {
-                            printf("arg must be simple symbol");
+                            printf("arg must be simple symbol\n");
                             exit(1);
                         }
-                        
-                        localchart_insert(compiler->current_unit->locals_chart, el->value.symbol);
+                        if(localchart_insert(compiler->current_unit->locals_chart, el->value.symbol) == -1) {
+                            printf("Special form 'fn' error: duplicate argument '%s'\n", el->value.symbol);
+                            exit(1);
+                        }
                         //printf(result != -1 ? "inserted\n" : "removed\n");
                     };
 
@@ -532,8 +551,19 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                 else if(strcmp(symbol, "<=") == 0) {  emit_bin_op(compiler, I_LTE, rest);}
                 else if(strcmp(symbol, ">") == 0)  {   emit_bin_op(compiler, I_GT, rest);}
                 else if (strcmp(symbol, "let") == 0) { //locally scoped variables
-                    SExpr* bindings = sexpr_list_first(rest);
-                    int even = 1;
+                    if(rest == NULL) {
+                        printf("Invalid special form 'let'\n");
+                        exit(1);
+                    }
+                    SExpr* bindings = sexpr_list_first(rest); // list (a 1 b 1)
+                    if(bindings->type != SEXPR_LIST) {
+                            printf("Invalid special form 'let'. Does not have local variable declaration\n");
+                            exit(1);
+                    }
+                    if((sexpr_list_len(bindings) % 2) == 1) {
+                            printf("Uneven forms in let binding\n");
+                            exit(1);
+                    }
                     compiler_enter_scope(compiler);
 
                     SExpr* cur_exp;
@@ -543,13 +573,12 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             break;
                         }
                         SExpr* next = sexpr_list_rest(cur_exp);
-                        //if uneven forms count for let declaration
-                        if(next == NULL && (even % 2 == 1)) {
-                            printf("Uneven forms in let binding\n");
-                            exit(1);
-                        }
 
                         const SExpr* lhs = sexpr_list_first(cur_exp);
+                        if(lhs->type != SEXPR_SYMBOL) {
+                            printf("Special form 'let' must have symbol on left hand side\n");
+                            exit(1);
+                        }
                         SExpr* rhs = sexpr_list_first(next);
                         compiler_emit(compiler, rhs);
 
@@ -567,7 +596,6 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             compiler_write_byte(compiler, I_SET_LOCAL);
                             compiler_write_byte(compiler, reg);
                         }
-                        even+=1;
                         cur_exp = next;
                     }
                     SExpr* let_body = sexpr_list_rest(rest);
@@ -579,8 +607,13 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     //compiler_leave_scope(compiler);
 
                 } else if (strcmp(symbol, "var") == 0) { //global variable
+                    if(rest == NULL) {
+                        printf("No name found for declaration 'var'");
+                        exit(1);
+                    }
                     const SExpr* varname = sexpr_list_first(rest);
-                    if(varname->type!= SEXPR_SYMBOL) {
+                    
+                    if(varname->type != SEXPR_SYMBOL) {
                         printf("For var declaration, expected symbol");
                         exit(1);
                     }
@@ -590,24 +623,22 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     }
                     SExpr* value = sexpr_list_first(sexpr_list_rest(rest));
 
-
                     compiler_emit(compiler,value);
                     
-                    vm_string* vms = compiler_fetch_string(compiler, varname->value.symbol);
-                    const int str_loc = compiler_add_const(compiler, into_lobj(vms));
+                    vm_string* vm_str = compiler_fetch_string(compiler, varname->value.symbol);
+                    const int str_loc = compiler_add_const(compiler, into_lobj(vm_str));
                     compiler_write_byte(compiler, I_SET_GLOBAL);
                     compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
-                    #define BYTE_LEN \
-                        (darray_size(compiler->current_unit->bytes))
 
                     int if_len = sexpr_list_len(rest);
-
                     if(if_len != 3) {
                         printf("Special form 'if' error: Expected 3 expressions");
                         exit(1);
                     }
 
+                    #define BYTE_LEN \
+                        (darray_size(compiler->current_unit->bytes))
 
                     SExpr* condition = sexpr_list_first(rest);
 
@@ -637,63 +668,88 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
 
                     #undef BYTE_LEN
                 } else if (strcmp(symbol, "and") == 0) {
-                    // evaluate first. if false, evaluate second one
+
+                    int and_len = sexpr_list_len(rest); // rest = (1 2)
+                    if(and_len < 2 || and_len > MAX_ARGS) {
+                        printf("Special form 'and' error: Expected 2 to %d expressions\n", MAX_ARGS);
+                        exit(1);
+                    }
+                    // (and a b c): evaluate operands left to right. After each one but
+                    // the last, jump to the end if it is falsy, leaving it on the stack
+                    // as the result; otherwise pop it and evaluate the next one.
                     #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))
 
-                    // emit first
+                    // one jump per operand except the last; the guard above keeps
+                    // jump_count below MAX_ARGS, so these arrays cannot overflow
+                    int jumps[MAX_ARGS - 1];
+                    int jump_ends[MAX_ARGS - 1];
+                    int jump_count = 0;
+
                     compiler_emit(compiler, sexpr_list_first(rest));
-
-                    const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY);
-                    const int cur_size = BYTE_LEN;
-
-                    rest = sexpr_list_rest(rest);
-                    // emit second
-                    compiler_emit(compiler, sexpr_list_first(rest));
-
-                    const size_t cur_location = BYTE_LEN - cur_size;
-
-                    compiler_jump_patch(compiler, ushort_begin, cur_location);
-
+                    for (SExpr* next = sexpr_list_rest(rest); next != NULL && sexpr_list_first(next) != NULL;
+                         next = sexpr_list_rest(next)) {
+                        jumps[jump_count] = compiler_jump_emit(compiler, I_JMP_FALSY);
+                        jump_ends[jump_count] = BYTE_LEN; // offsets are measured from after the jump
+                        jump_count++;
+                        compiler_write_byte(compiler, I_POP); // I_JMP_FALSY only peeks
+                        compiler_emit(compiler, sexpr_list_first(next));
+                    }
+                    for (int j = 0; j < jump_count; j++) {
+                        compiler_jump_patch(compiler, jumps[j], BYTE_LEN - jump_ends[j]);
+                    }
                     #undef BYTE_LEN
                 } else if (strcmp(symbol, "while") == 0) {
+                    int while_bodylen = sexpr_list_len(rest);
+                    if(while_bodylen < 2) {
+                        printf("Special form 'while' error: Expected a condition and a body\n");
+                        exit(1);
+                    }
 
                     #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))
 
-                    //condition
-                    compiler_emit(compiler, sexpr_list_first(rest));
+                    // loop: cond; JMP_FALSY exit; POP; (body; POP)*; LOOP loop
+                    // exit: the falsy condition stays on the stack as the while's value
                     const int loop_back_loc = BYTE_LEN;
+                    compiler_emit(compiler, sexpr_list_first(rest));
                     const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY); // returns where the ushort begins +2
                     compiler_write_byte(compiler, I_POP);
 
-                    if (sexpr_list_len(rest)) {
-                        SExpr* cur_exp;
-                        sexpr_list_foreach(cur_exp, rest) {
-                            // printf("cur form"); print_sexpr(sexpr_list_first(cur_exp)); printf("\n");
-                            compiler_emit(compiler, sexpr_list_first(cur_exp));
-                        };
-                    // else emit a 0, or falsy in this lang
-                    } else {
-                        compiler_load_const(compiler, lobj_num(0));
+                    SExpr* cur_exp;
+                    sexpr_list_foreach(cur_exp, sexpr_list_rest(rest)) {
+                        compiler_emit(compiler, sexpr_list_first(cur_exp));
+                        compiler_write_byte(compiler, I_POP);
                     }
-
-                    //compiler_emit(compiler, sexpr_list_first(rest)); 
 
                     compiler_write_byte(compiler, I_LOOP);
                     compileunit_write_ushort(compiler->current_unit, BYTE_LEN - loop_back_loc + 2);
                     compiler_jump_patch(compiler, ushort_begin, BYTE_LEN-ushort_begin-2);
-                    compiler_write_byte(compiler, I_POP);
                     #undef BYTE_LEN
 
                 } else if(symbol[0] == '@')  {
                     char* ident = symbol+1;
+                    if(ident[0] == '\0') {
+                        printf("Expected a symbol after '@' \n");
+                        exit(1);
+                    }
+                    if(sexpr_list_len(rest) != 1) {
+                        printf("special form needs 1 element to assign '@' \n");
+                        exit(1);
+                    }
+
+                    if (localchart_resolve_symbol(compiler->current_unit->locals_chart, ident) == -1
+                     && resolve_upvalue(compiler->current_unit, ident) == -1) {
+                        printf("Could not resolve symbol %s to assign value\n", ident);
+                        exit(1);
+                    }
+
                     compiler_emit(compiler, sexpr_list_first(rest));
                     compiler_rebind_localsymbol(compiler, ident);
                 } else {
                     // if its none of the compiler specials, we assume it's a function call.
                     const int argc = sexpr_list_len(rest);
-                    if(argc > 256) {
+                    if(argc > MAX_ARGS) {
                         printf("Too many arguments!\n");
                         exit(1);
                     }
