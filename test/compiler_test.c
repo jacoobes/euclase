@@ -319,7 +319,7 @@ void test_fn() {
 
     // well-formed
     assert(run_and_get_r("(fn (add (a b)) (+ a b)) (var r (add 10 20)) r") == 30);
-    // README example: recursion
+    // recursion
     assert(run_and_get_r(
         "(fn (fact (x)) (if (<= x 2) x (* x (fact (- x 1)))))"
         "(var r (fact 5)) r") == 120);
