@@ -206,7 +206,8 @@ void test_while() {
     printf("  while: malformed form rejected\n");
 
     // sum 5 + 4 + 3 + 2 + 1
-    assert(run_and_get_r("(var r (let (i 5 s 0) (while i (@s (+ s i)) (@i (- i 1))) s)) r") == 15);
+    assert(run_and_get_r("(var r (let (i 5  s 0) \
+                                        (while i (@s (+ s i)) (@i (- i 1))) s)) r") == 15);
     // a false condition never runs the body
     assert(run_and_get_r("(var r (let (s 1) (while 0 (@s 99)) s)) r") == 1);
     printf("  while: well-formed ok\n");
@@ -219,7 +220,8 @@ void test_while() {
 // iterations overflow the 256-slot stack (issue #11). Runs last so it does not
 // hide the results above.
 void test_while_stack_balance() {
-    assert(run_and_get_r("(var r (let (i 300) (while i (@i (- i 1))) 7)) r") == 7);
+    assert(run_and_get_r("(var r (let (i 300) \
+                                    (while i (@i (- i 1))) 7)) r") == 7);
     printf("test_while_stack_balance passed!\n");
 }
 

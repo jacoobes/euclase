@@ -691,37 +691,30 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     #undef BYTE_LEN
                 } else if (strcmp(symbol, "while") == 0) {
                     int while_bodylen = sexpr_list_len(rest);
-                    if(while_bodylen != 3) {
-                        printf("Special form 'while' error: Expected 3 expressions\n");
+                    if(while_bodylen < 2) {
+                        printf("Special form 'while' error: Expected a condition and a body\n");
                         exit(1);
                     }
 
                     #define BYTE_LEN \
                         (darray_size(compiler->current_unit->bytes))
 
-                    //condition
-                    compiler_emit(compiler, sexpr_list_first(rest));
+                    // loop: cond; JMP_FALSY exit; POP; (body; POP)*; LOOP loop
+                    // exit: the falsy condition stays on the stack as the while's value
                     const int loop_back_loc = BYTE_LEN;
+                    compiler_emit(compiler, sexpr_list_first(rest));
                     const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY); // returns where the ushort begins +2
                     compiler_write_byte(compiler, I_POP);
 
-                    if (sexpr_list_len(rest)) {
-                        SExpr* cur_exp;
-                        sexpr_list_foreach(cur_exp, rest) {
-                            // printf("cur form"); print_sexpr(sexpr_list_first(cur_exp)); printf("\n");
-                            compiler_emit(compiler, sexpr_list_first(cur_exp));
-                        };
-                    // else emit a 0, or falsy in this lang
-                    } else {
-                        compiler_load_const(compiler, lobj_num(0));
+                    SExpr* cur_exp;
+                    sexpr_list_foreach(cur_exp, sexpr_list_rest(rest)) {
+                        compiler_emit(compiler, sexpr_list_first(cur_exp));
+                        compiler_write_byte(compiler, I_POP);
                     }
-
-                    //compiler_emit(compiler, sexpr_list_first(rest)); 
 
                     compiler_write_byte(compiler, I_LOOP);
                     compileunit_write_ushort(compiler->current_unit, BYTE_LEN - loop_back_loc + 2);
                     compiler_jump_patch(compiler, ushort_begin, BYTE_LEN-ushort_begin-2);
-                    compiler_write_byte(compiler, I_POP);
                     #undef BYTE_LEN
 
                 } else if(symbol[0] == '@')  {

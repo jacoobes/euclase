@@ -29,6 +29,37 @@ Tests:
 xmake run -g test
 ```
 
+### Debugging
+
+Build with AddressSanitizer and UndefinedBehaviorSanitizer to catch memory errors (out-of-bounds access, use-after-free, NULL dereference) at the line they happen. xmake remembers this configuration for later builds:
+```
+xmake f -m debug --policies=build.sanitizer.address,build.sanitizer.undefined -y
+xmake build -r
+```
+`-r` forces a full rebuild so every file picks up the new flags.
+
+Run a source file. `-w .` runs from the repo root so relative paths resolve; without it, `xmake run` starts in the build directory:
+```
+xmake run -w . main -e sample/lang/fns.euc
+```
+To keep running after the first sanitizer report instead of stopping, add `--cflags="-fsanitize-recover=address"` to the `xmake f` line and run with `ASAN_OPTIONS=halt_on_error=0`.
+
+Step through a program in lldb (gdb on Linux):
+```
+xmake run -d main -e sample/lang/fns.euc
+```
+
+Check for leaks on macOS, using a build without sanitizers:
+```
+xmake f -m debug -y && xmake build -r main
+MallocStackLogging=1 leaks --atExit -- ./build/macosx/arm64/debug/main -e sample/lang/fns.euc
+```
+
+Return to a normal build:
+```
+xmake f -m debug -y && xmake build -r
+```
+
 ## Virtual Machine Specification
 
 The virtual machine is a bytecode based interpreter which is inspired from [Crafting Interpreters](https://craftinginterpreters.com/),
@@ -221,7 +252,7 @@ Returns the true result
 
 ### Loops
 
-Only `while` loops are implemented. The result of the last iteration is returned
+Only `while` loops are implemented.
 ```clj
 (let (a 10)
   (while a
