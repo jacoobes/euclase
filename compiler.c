@@ -439,15 +439,28 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     exit(0);
                 }
                 if(strcmp(symbol, "fn") == 0) {
-                    SExpr* fn_def = sexpr_list_first(rest); // '(name (a b))
+                    // (fn (name (args...)) body...): check the shape before reading any part
+                    SExpr* fn_def = rest == NULL ? NULL : sexpr_list_first(rest); // '(name (a b))
+                    if(fn_def == NULL || fn_def->type != SEXPR_LIST) {
+                        printf("Special form 'fn' error: expected (fn (name (args...)) body...)\n");
+                        exit(1);
+                    }
                     const SExpr* fn_name = sexpr_list_first(fn_def); // "name"
-                    SExpr* args = sexpr_list_first(sexpr_list_rest(fn_def)); // (a b)
-                    SExpr* body = sexpr_list_rest(rest); // '(+ a b)
-
-                    if(fn_name->type != SEXPR_SYMBOL) {
+                    if(fn_name == NULL || fn_name->type != SEXPR_SYMBOL) {
                         printf("fnname must be a simple symbol\n");
                         exit(1);
                     }
+                    SExpr* args_cell = sexpr_list_rest(fn_def);
+                    SExpr* args = args_cell == NULL ? NULL : sexpr_list_first(args_cell); // (a b)
+                    if(args == NULL || args->type != SEXPR_LIST) {
+                        printf("Special form 'fn' error: expected an argument list after '%s'\n", fn_name->value.symbol);
+                        exit(1);
+                    }
+                    if(sexpr_list_rest(args_cell) != NULL) {
+                        printf("Special form 'fn' error: expected only a name and an argument list in (%s ...)\n", fn_name->value.symbol);
+                        exit(1);
+                    }
+                    SExpr* body = sexpr_list_rest(rest); // '(+ a b)
 #ifdef DEBUG_COMPILER
                     printf("emitting fn: '%s'\n", fn_name->value.symbol);
 #endif
@@ -471,11 +484,13 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             break;
                         }
                         if(el->type != SEXPR_SYMBOL) {
-                            printf("arg must be simple symbol");
+                            printf("arg must be simple symbol\n");
                             exit(1);
                         }
-                        
-                        localchart_insert(compiler->current_unit->locals_chart, el->value.symbol);
+                        if(localchart_insert(compiler->current_unit->locals_chart, el->value.symbol) == -1) {
+                            printf("Special form 'fn' error: duplicate argument '%s'\n", el->value.symbol);
+                            exit(1);
+                        }
                         //printf(result != -1 ? "inserted\n" : "removed\n");
                     };
 

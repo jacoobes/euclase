@@ -302,6 +302,39 @@ void test_assign_value() {
     printf("test_assign_value passed!\n");
 }
 
+// `fn` defines a function: (fn (name (args...)) body...), per the README.
+// Every malformed shape must be a compile error, not a crash (issue #8).
+void test_fn() {
+    // malformed: must be rejected, not crash
+    assert(rejected("(fn)"));                    // nothing after fn
+    assert(rejected("(fn ())"));                 // empty definition, no name
+    assert(rejected("(fn (f))"));                // no argument list
+    assert(rejected("(fn f 1)"));                // definition is not a list
+    assert(rejected("(fn (5 ()) 1)"));           // name is not a symbol
+    assert(rejected("(fn (f a) a)"));            // arguments are not a list
+    assert(rejected("(fn (f (a 5)) a)"));        // argument is not a symbol
+    assert(rejected("(fn (f (a a)) a)"));        // duplicate argument
+    assert(rejected("(fn (f () x) 1)"));         // extra part in the definition
+    printf("  fn: malformed forms rejected\n");
+
+    // well-formed
+    assert(run_and_get_r("(fn (add (a b)) (+ a b)) (var r (add 10 20)) r") == 30);
+    // README example: recursion
+    assert(run_and_get_r(
+        "(fn (fact (x)) (if (<= x 2) x (* x (fact (- x 1)))))"
+        "(var r (fact 5)) r") == 120);
+    // an empty body returns 0, and the last body form is the value
+    assert(run_and_get_r("(fn (f ())) (var r (f)) r") == 0);
+    assert(run_and_get_r("(fn (f ()) 1 2 3) (var r (f)) r") == 3);
+    // a function defined inside another one is local to it
+    assert(run_and_get_r(
+        "(fn (outer (x)) (fn (inner (y)) (* y 2)) (inner x))"
+        "(var r (outer 21)) r") == 42);
+    printf("  fn: well-formed ok\n");
+
+    printf("test_fn passed!\n");
+}
+
 int main() {
     test_let_duplicate_binding();
     test_if_arity();
@@ -312,6 +345,7 @@ int main() {
     test_while_stack_balance();
     test_assign();
     test_assign_value();
+    test_fn();
     printf("All tests passed!\n");
     return 0;
 }
