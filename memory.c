@@ -18,14 +18,11 @@ void* reallocate (void* ptr, size_t old_size, size_t new_size) {
         exit(1);
     }
 
-     const bool can_collect = !gc.paused && gc.vm != NULL;
 #ifdef DEBUG_STRESS_GC
-     if (can_collect) {
-         printf("[GC] stress test\n");
-         collect_garbage(gc.vm);
-     }
+     printf("[GC] stress test\n");
+     collect_garbage(gc.vm);
 #endif
-     if(can_collect && gc.bytes_allocated > gc.next_gc) {
+     if(gc.bytes_allocated > gc.next_gc) {
          collect_garbage(gc.vm);
      }
     /*

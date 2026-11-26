@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include "vm.h"
 #include "table.h"
-#include "gc.h"
 
 
 void local_init(Local* lc, const solid_str name, const int depth, const int reg) {
@@ -221,13 +220,9 @@ lobj compiler_link(Compiler* compiler, VM* vm) {
     }
     darray_push(main_unit->bytes, I_RETURN);
 
-    // objects built here aren't reachable from any root until vm_exec runs
-    // main, so a collection in between would free them
-    const bool was_paused = gc.paused;
-    gc.paused = true;
-    lobj main = into_lobj(vm_closure_create(link_unit(compiler, main_unit, vm)));
-    gc.paused = was_paused;
-    return main;
+    // TODO: objects built here aren't reachable from any root until vm_exec
+    // runs main, so a collection in between frees them. Handled in the GC PR.
+    return into_lobj(vm_closure_create(link_unit(compiler, main_unit, vm)));
 }
 
 
