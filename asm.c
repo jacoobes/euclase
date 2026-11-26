@@ -368,18 +368,19 @@ int main(int argc, char** args) {
     asm_compile(&assembler, infinite_loop);
     
     VM vm;
-    HashTable globals, strings;
-    table_create(&globals);
-    table_create(&strings);
+    HashTable* globals=table_create();
+    HashTable* strings= table_create();
+    
     printf("Finding main entry...\n");
     lobj main = asm_get_entry(&assembler);
     printf("Found main entry...\n");
-    vm_create(&vm, &globals, &strings);
+    vm_create(&vm, globals, strings);
     int result = vm_exec(&vm, &main, 0);
     if(result) {
         
     }
-    
+    table_free(globals);
+    table_free(strings);
     asm_free(&assembler);
     vm_free(&vm);
     

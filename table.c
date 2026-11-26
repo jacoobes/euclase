@@ -98,10 +98,12 @@ int table_delete(const HashTable* tbl, vm_string* k) {
     return true;
 }
 
-void table_create(HashTable* tbl) {
+HashTable* table_create() {
+    HashTable* tbl = malloc(sizeof(*tbl));
     tbl->count = 0;
     tbl->capacity=0; 
     tbl->entries=NULL;
+    return tbl;
 }
 
 vm_string* table_find_string(HashTable* table, const char* ss, uint32_t hash) {
