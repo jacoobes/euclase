@@ -1,7 +1,6 @@
 #ifndef compiler_h
 #define compiler_h
 
-#include "table.h"
 #include "vm.h"
 #include "reader.h"
 
@@ -30,9 +29,23 @@ typedef struct  {
     bool is_local;
 } Upvalue;
 
-typedef struct CompileUnit {
+typedef struct CompileUnit CompileUnit;
+
+// Compile-time constant. The compiler never allocates VM objects: strings are
+// indexes into Compiler.strings and nested functions stay CompileUnits until
+// compiler_link turns them into vm objects.
+typedef struct {
+    enum { K_NUM, K_STR, K_FN } tag;
+    union {
+        double num;
+        int str;          // index into Compiler.strings
+        CompileUnit* fn;  // nested function, owned by this constant
+    } as;
+} Const;
+
+struct CompileUnit {
     darray(uint8_t) bytes;
-    darray(lobj) constants;
+    darray(Const) constants;
 
     // upvalues are closed over values that outlive the stack. They point to the index in the stack
     Upvalue upvalues[UINT8_COUNT];
@@ -43,14 +56,11 @@ typedef struct CompileUnit {
     char* name;
     int arity;
     struct CompileUnit* enclosing;
-} CompileUnit;
+};
 
 // name is duplicated, need to manage memory
 CompileUnit* compileunit_create(CompileUnit* enclosing, const char* name, const int arity); 
 void compileunit_free(CompileUnit* cu); 
-lobj compile_unit_get_closure(CompileUnit* cu); 
-// a compile unit is transformed into a lobj of type OBJ with CLOSURE via copy
-lobj compile_unit_get_fn(const CompileUnit* cu); 
 
 
 typedef struct {
@@ -58,23 +68,23 @@ typedef struct {
     // current_unit belongs to units, so when we clean up, we set to NULL, and then
     // just free units
     CompileUnit* current_unit;
-    HashTable* globals;
-    HashTable* strings;
+    // interned strings, deduplicated; Const.as.str indexes into this
+    darray(solid_str) strings;
 } Compiler;
 
 
 
-void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings); 
+void compiler_create(Compiler *compiler); 
 
 void compiler_destroy(Compiler *compiler); 
 
 int compiler_write_byte(const Compiler *compiler, const uint8_t byte); 
 
 // adds value to current units' compiler pool. Returns the size of array after pushing
-int compiler_add_const(const Compiler *compiler, const lobj value); 
+int compiler_add_const(const Compiler *compiler, const Const value); 
 
 // emits I_LOAD and adds constant to current unit's compiler pool
-void compiler_load_const(const Compiler* compiler, lobj constant); 
+void compiler_load_const(const Compiler* compiler, Const constant); 
 size_t compiler_leave_scope(Compiler* lc); 
 void compiler_enter_scope(const Compiler* lc);
 
@@ -86,10 +96,15 @@ int localchart_insert(LocalChart *lc, const char* symbol);
 void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc);
 void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_loc);
 
-vm_string* compiler_fetch_string(const Compiler* compiler, const char* symbol);
+// returns the index of symbol in compiler->strings, adding it if new
+int compiler_fetch_string(Compiler* compiler, const char* symbol);
 
 
 void compiler_emit(Compiler* compiler, SExpr* sexpr);
+
+// Turns the compiled program into a VM closure: interns strings into
+// vm->strings and builds vm_functions. Call once, after all compiler_emit calls.
+lobj compiler_link(Compiler* compiler, VM* vm);
 
 #endif
 
