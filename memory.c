@@ -41,7 +41,7 @@ void* reallocate (void* ptr, size_t old_size, size_t new_size) {
 void mark_value(VM* vm, const lobj obj) {
   if (IS_OBJ(obj))  {
     mark_object(vm, obj.v.obj);
-  } 
+  }
 }
 
 static void mark_array(VM* vm, const lobj* array, const int count) {
@@ -133,9 +133,9 @@ void trace_refs(VM* vm){
 }
 
 
-void sweep(VM* vm) {
+void sweep() {
     vm_object* previous = NULL;
-    vm_object* object = vm->objects;
+    vm_object* object = gc.objs;
     while(object != NULL) {
         if(object->is_marked) {
             object->is_marked=false;
@@ -147,7 +147,7 @@ void sweep(VM* vm) {
             if(previous != NULL) {
                 previous->next = object;
             } else {
-                vm->objects = object;
+                gc.objs = object;
             }
             vm_object_free(unreached);
         }
@@ -172,14 +172,14 @@ void collect_garbage(VM* vm) {
     trace_refs(vm);
 
     #ifdef DEBUG_LOG_GC
-        printf("GC table mark white\n");
+        printf("GC table mark white, weak references\n");
     #endif
     table_mark_white(vm->strings);
 
     #ifdef DEBUG_LOG_GC
         printf("GC sweep\n");
     #endif
-    sweep(vm);
+    sweep();
 
 
     gc.next_gc = gc.bytes_allocated * GC_HEAP_GROW_FACTOR;

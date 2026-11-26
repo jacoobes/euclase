@@ -258,7 +258,6 @@ vm_native* vm_native_create(
 
 vm_closure* vm_closure_create( vm_function* fn);
 vm_string* vm_string_create( const char* contents);
-vm_string* vm_string_from_ss(solid_str ss);
 void vm_string_free(vm_string* s);
 vm_upvalue* vm_upvalue_create(lobj* location);
 void vm_object_free(vm_object*);

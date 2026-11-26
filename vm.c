@@ -10,6 +10,8 @@
 void vm_object_init(vm_object* vmobj, LOBJ_TYPE lty) {
    vmobj->is_marked=false; 
    vmobj->type=lty;
+
+   vmobj->next = NULL;
    // gc_add_obj adds to the chain of objects
    gc_add_obj(vmobj);
 }
@@ -29,13 +31,6 @@ vm_string* vm_string_create(const char* contents) {
     return s;
 }
 
-
-vm_string* vm_string_from_ss(solid_str ss) {
-    vm_string* s = ALLOCATE(vm_string, 1);
-    vm_object_init(&s->obj, OBJ_STR);
-    s->contents = ss;
-    return s;
-}
 
 void vm_string_free(vm_string* s) {
     solid_str_free(&s->contents);
@@ -295,7 +290,6 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings) {
     vm->globals = globals;
     vm->strings = strings;
         
-    vm->objects = NULL;
 
     vm->gray_capacity=0;
     vm->gray_count=0;
@@ -495,8 +489,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
                 uint8_t argc = READ_BYTE();
                 lobj maybe_callable = vm_peek(vm, argc);
 #ifdef DEBUG
-                printf("argc %d\n", argc);
-                printf("About to call function "); lobj_println(&maybe_callable);
+                printf("Calling function "); lobj_print(&maybe_callable); printf(" argc %d\n", argc);
 #endif
                 int res = 1;
                 if (is_closure(&maybe_callable)) {

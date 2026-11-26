@@ -89,7 +89,6 @@ int main(int argc, char **argv) {
             SExpr **exprs = read_all(fib, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
 
-            GarbageCollector gc;
             HashTable globals, strings;
             table_create(&globals);
             table_create(&strings);
@@ -141,12 +140,16 @@ int main(int argc, char **argv) {
             SExpr **exprs = read_all(program, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
 
-            HashTable globals, strings;
-            table_create(&globals);
-            table_create(&strings);
+            
+            // the compiler allocates vm strings, and any allocation can
+            // collect, so the GC needs its VM before compiling (see the TODO
+            // on compiler_fetch_string)
+            VM vm;
+            gc_init(&vm);
+            vm_create(&vm, &globals, &strings);
 
-            Compiler compiler;
-            compiler_create(&compiler, &globals, &strings);
+            
+            Compiler compiler; compiler_create(&compiler);
             for (size_t i = 0; i < count; i++) {
                 compiler_emit(&compiler, exprs[i]);
             }
@@ -176,8 +179,6 @@ int main(int argc, char **argv) {
             // I have transformed all compile units into functions / constants
             compiler_destroy(&compiler);
 
-            VM vm;
-            vm_create(&vm, &globals, &strings);
             vm_exec(&vm, &main, 0);
 
 
@@ -187,46 +188,6 @@ int main(int argc, char **argv) {
 
             return 0;
         }
-    } else {
-        // while (true) {
-        //     char *input = readline(">> ");
-        //     if (input && *input)
-        //         add_history(input);
-        //     else {
-        //         continue;
-        //     }
-        //     Arena a = {.begin=NULL, .end=NULL};
-        //     arena_alloc(&a, 65536);
-        //     size_t count;
-        //     SExpr** exprs = read_all(&a, input, &count);
-        //
-        //     HashTable globals, strings;
-        //     table_create(&globals);
-        //     table_create(&strings);
-        //
-        //     Compiler compiler;
-        //     compiler_create(&compiler, &globals, &strings);
-        //
-        //     for (size_t i = 0; i < count; i++) {
-        //         printf("Emitting bytecode for form:"); print_sexpr(exprs[i]);
-        //         emit(&compiler, exprs[i]);
-        //     }
-        //
-        //     printf("\n");
-        //     for (size_t i = 0; i < count; i++) {
-        //         print_sexpr(exprs[i]);
-        //         printf(" ");
-        //     }
-        //     printf("\n");
-        //     //free(input);
-        //     printf("Num expressions: %zu\n", count);
-        //     for (size_t i = 0; i < count; i++) {
-        //         free_sexpr(exprs[i]);
-        //     }
-        //     table_free(&globals);
-        //     table_free(&strings);
-        //     compiler_destroy(&compiler);
-        // }
-    }
+    } 
     return 0;
 }
