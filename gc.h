@@ -13,11 +13,12 @@ typedef struct {
     size_t next_gc;
 
     bool is_init;
+    VM* vm;
 } GarbageCollector;
 
-static GarbageCollector gc;
+extern GarbageCollector gc;
 
-void gc_init();
+void gc_init(VM*);
 void gc_add_obj(vm_object* obj);
 
 void gc_shutdown();

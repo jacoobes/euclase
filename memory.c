@@ -18,12 +18,12 @@ void* reallocate (void* ptr, size_t old_size, size_t new_size) {
         exit(1);
     }
 
-// #ifdef DEBUG_STRESS_GC
-//     printf("[GC] stress test\n");
-//     collect_garbage(gc.vm);
-// #endif
+#ifdef DEBUG_STRESS_GC
+     printf("[GC] stress test\n");
+     collect_garbage(gc.vm);
+#endif
      if(gc.bytes_allocated > gc.next_gc) {
-     //    collect_garbage();
+         collect_garbage(gc.vm);
      }
     /*
      * If the first argument is a null pointer, realloc() allocates a new memory block, behaving similarly to malloc().
@@ -52,20 +52,20 @@ static void mark_array(VM* vm, const lobj* array, const int count) {
 
 void mark_object(VM* vm, vm_object* object) {
     if(object == NULL) return;
-    printf("obj is not null");
+
     // prevent cycle 
     if (object->is_marked) return;
 
     object->is_marked=true;
+    
     #ifdef DEBUG_LOG_GC
-      printf("%p marked object", (void*)object);
+      printf("%p marked object, type %d ", (void*)object, object->type);
       printf("\n");
     #endif
-
     if (vm->gray_capacity < vm->gray_count + 1) {
-        vm->gray_capacity = vm->gray_capacity * 8;
+        vm->gray_capacity = vm->gray_capacity < 8 ? 8 : vm->gray_capacity * 8;
         vm->gray_stack = (vm_object**)realloc(vm->gray_stack,
-                                      sizeof(vm_object*) * vm->gray_capacity);
+                                              sizeof(vm_object*) * vm->gray_capacity);
     }
     vm->gray_stack[vm->gray_count++] = object;
 }
@@ -95,14 +95,13 @@ void mark_roots(VM* vm) {
 void blacken_obj(VM* vm, vm_object* o) {
     switch(o->type) {
         case OBJ_CLOSURE: {
-
             vm_closure* cls = ((vm_closure*)o);
     #ifdef DEBUG_LOG_GC
-            printf("blackening closure") ; lobj_println(&cls->fn->name);
+            printf("blackening closure ") ; lobj_println(&cls->fn->name);
     #endif
             mark_object(vm, (vm_object*)cls->fn);
-            for(int i =0; i < cls->upvalues_ct; i++) {
-                mark_object(vm, (vm_object*)cls->upvalues);
+            for(uint8_t i = 0; i < cls->upvalues_ct; i++) {
+                mark_object(vm, (vm_object*)cls->upvalues[i]);
             }
         } break;
         case OBJ_STR: {
@@ -128,6 +127,7 @@ void blacken_obj(VM* vm, vm_object* o) {
 void trace_refs(VM* vm){
     while (vm->gray_count > 0) {
         vm_object* o = vm->gray_stack[--vm->gray_count];
+        //blackening means dead and ready to clean
         blacken_obj(vm, o);
     }
 }
@@ -172,7 +172,7 @@ void collect_garbage(VM* vm) {
     trace_refs(vm);
 
     #ifdef DEBUG_LOG_GC
-        printf("GC mark white\n");
+        printf("GC table mark white\n");
     #endif
     table_mark_white(vm->strings);
 

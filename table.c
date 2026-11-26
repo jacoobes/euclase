@@ -150,7 +150,7 @@ void mark_table(VM* vm, HashTable* table) {
         TableEntry* entry = &table->entries[i];
         mark_object(vm, (vm_object*)entry->key);
         mark_value(vm, entry->value);
-  }
+    }
 }
 
 

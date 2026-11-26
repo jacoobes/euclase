@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
                 (+ a (+ 120 1))
             );
 
-            const char* looper = QUOTE( 
+            const char* looper = QUOTE(
                 (let (a 10) 
                     (while a 
                         (@a (- a 1))))
@@ -89,13 +89,16 @@ int main(int argc, char **argv) {
             SExpr **exprs = read_all(fib, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
 
-            gc_init();
+            GarbageCollector gc;
             HashTable globals, strings;
             table_create(&globals);
             table_create(&strings);
 
             VM vm;
+            gc_init(&vm);
+
             vm_create(&vm, &globals, &strings);
+
 
             Compiler compiler;
             compiler_create(&compiler, &globals, &strings);
@@ -124,7 +127,7 @@ int main(int argc, char **argv) {
 
             vm_free(&vm);
 
-            //gc_shutdown();
+            gc_shutdown();
 
         } else {
             size_t read;

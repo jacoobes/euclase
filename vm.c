@@ -331,7 +331,7 @@ static vm_upvalue* captureUpvalue(VM* vm, lobj* local) {
     return createdUpvalue;
 }
 
-static void closeUpvalues(VM* vm, lobj* last) {
+static void close_upvalues(VM* vm, lobj* last) {
   while (vm->open_upvalues != NULL &&
          vm->open_upvalues->location >= last) {
     vm_upvalue* upvalue = vm->open_upvalues;
@@ -564,7 +564,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
             case I_RETURN: {
                 lobj value = vm_pop(vm);
 
-                closeUpvalues(vm, cur_frame->slots);
+                close_upvalues(vm, cur_frame->slots);
 
                 vm->frame_count--;
 #ifdef DEBUG
@@ -660,7 +660,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
 #ifdef DEBUG
                 printf("I_CLOSE_UPVALUE\n");
 #endif
-                closeUpvalues(vm, vm->stack_top - 1);
+                close_upvalues(vm, vm->stack_top - 1);
                 vm_pop(vm);
             } break;
             case I_STR_ADD: {
