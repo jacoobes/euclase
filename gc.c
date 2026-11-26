@@ -6,6 +6,7 @@ GarbageCollector gc;
 void gc_init(VM* vm) {
     gc.objs=NULL;
     gc.is_init=true;
+    gc.paused=false;
 
     // The starting threshold here is arbitrary
     gc.next_gc = 1024 * 1024;

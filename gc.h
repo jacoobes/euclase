@@ -13,6 +13,8 @@ typedef struct {
     size_t next_gc;
 
     bool is_init;
+    // set while building objects that no root reaches yet (compiler_link)
+    bool paused;
     VM* vm;
 } GarbageCollector;
 

@@ -1,6 +1,8 @@
 #include "compiler.h"
 #include <stdio.h>
 #include "vm.h"
+#include "table.h"
+#include "gc.h"
 
 
 void local_init(Local* lc, const solid_str name, const int depth, const int reg) {
@@ -100,58 +102,41 @@ CompileUnit* compileunit_create(CompileUnit* enclosing, const char* name, const 
 }
 
 
+// Frees the unit and every nested unit in its constant pool. bytes is not
+// freed: compiler_link hands it to the vm_function.
 void compileunit_free(CompileUnit* cu) {
     if (!cu) return;
+    Const* k;
+    darray_foreach(k, cu->constants) {
+        if (k->tag == K_FN) compileunit_free(k->as.fn);
+    }
+    darray_free(cu->constants);
     free(cu->name);
-
-    // NOTE:
-    // VM takes the ownership of compile unit, so we don't need to free the compiler units
     localchart_free(cu->locals_chart);
+    free(cu);
 }
 
-lobj compile_unit_get_closure(CompileUnit* cu) {
-    if (!cu) {
-        printf("compile_unit_get_fn: NULL\n");
-        exit(1);
-    };
-    //this is reallying ugly lol
-    return into_lobj(vm_closure_create(vm_function_create(cu->bytes.item, darray_size(cu->bytes),
-                                                          cu->constants.item, darray_size(cu->constants),
-                                                          cu->arity, lobj_str(cu->name),
-                                                          cu->upvalue_count)));
-}
-
-
-lobj compile_unit_get_fn(const CompileUnit* cu) {
-    if (!cu) {
-        printf("compile_unit_get_fn: NULL\n");
-        exit(1);
-    };
-    //this is reallying ugly lol
-    return into_lobj(vm_function_create(cu->bytes.item,
-                                        darray_size(cu->bytes),
-                                        cu->constants.item,
-                                        darray_size(cu->constants),
-                                        cu->arity,
-                                        lobj_str(cu->name),
-                                        cu->upvalue_count));
-}
-
-
-void compiler_create(Compiler *compiler, HashTable *globals, HashTable *strings) {
-    // darray_init(compiler->units);
+void compiler_create(Compiler *compiler) {
     compiler->current_unit = compileunit_create(NULL, "__main__", 0);
-
-    compiler->globals=globals;
-    compiler->strings=strings;
-
+    darray_init(compiler->strings);
 }
 
 void compiler_destroy(Compiler *compiler) {
-    while (compiler->current_unit->enclosing != NULL) {
-        compileunit_free(compiler->current_unit);
-        compiler->current_unit= compiler->current_unit->enclosing;
+    // only units still being compiled are on the enclosing chain; finished
+    // nested units are owned by their parent's K_FN constant
+    CompileUnit* cu = compiler->current_unit;
+    while (cu != NULL) {
+        CompileUnit* enclosing = cu->enclosing;
+        compileunit_free(cu);
+        cu = enclosing;
     }
+    compiler->current_unit = NULL;
+
+    solid_str* str;
+    darray_foreach(str, compiler->strings) {
+        solid_str_free(str);
+    }
+    darray_free(compiler->strings);
 }
 
 
@@ -161,43 +146,88 @@ int compiler_write_byte(const Compiler *compiler, const uint8_t byte) {
     return darray_size(cur_unit->bytes)-1;
 }
 
-vm_string* compiler_fetch_string(const Compiler* compiler, const char* symbol) {
-
-    vm_string* dupe = table_find_string(compiler->strings, symbol, hash_str(symbol, strlen(symbol)));
-    // if dupe doesn't exist (it's new)
-    if(!dupe) {
-        vm_string* vmstr = vm_string_create(symbol);
-        table_set(compiler->strings, vmstr, lobj_num(1));
-        return vmstr;
-    } else {
-        return dupe;
+// ponytail: linear scan, swap for a hash map if compiling big programs gets slow
+int compiler_fetch_string(Compiler* compiler, const char* symbol) {
+    const uint32_t hash = hash_str(symbol, strlen(symbol));
+    for (size_t i = 0; i < darray_size(compiler->strings); i++) {
+        solid_str* s = &darray_item(compiler->strings, i);
+        if (s->hash == hash && strcmp(SOLID_STR_TO_C(*s), symbol) == 0) {
+            return i;
+        }
     }
+    darray_push(compiler->strings, solid_str_new(symbol));
+    return darray_size(compiler->strings) - 1;
 }
 
+static Const const_num(double x) { return (Const){ .tag = K_NUM, .as.num = x }; }
+static Const const_str(int idx)  { return (Const){ .tag = K_STR, .as.str = idx }; }
+static Const const_fn(CompileUnit* cu) { return (Const){ .tag = K_FN, .as.fn = cu }; }
+
 // adds value to current units' compiler pool. Returns the size of array before pushing
-int compiler_add_const(const Compiler *compiler, const lobj value) {
+int compiler_add_const(const Compiler *compiler, const Const value) {
     CompileUnit* cu = compiler->current_unit;
-
-
-
-    // if is string, try to find cached string of same hash and contents
     darray_push(cu->constants, value);
-
-
     // the size of array before pushing
     return darray_size(cu->constants)-1;
 }
 
 // emits I_LOAD and adds constant to current unit's compiler pool
-void compiler_load_const(const Compiler* compiler, lobj constant) {
+void compiler_load_const(const Compiler* compiler, Const constant) {
     compiler_write_byte(compiler, I_LOAD);
 #ifdef DEBUG_COMPILER
-    printf("I_LOAD "); lobj_print(&constant); printf(" to %s\n", compiler->current_unit->name);
+    switch (constant.tag) {
+        case K_NUM: printf("I_LOAD %g", constant.as.num); break;
+        case K_STR: printf("I_LOAD \"%s\"", SOLID_STR_TO_C(darray_item(compiler->strings, constant.as.str))); break;
+        case K_FN:  printf("I_LOAD <fn %s>", constant.as.fn->name); break;
+    }
+    printf(" to %s\n", compiler->current_unit->name);
 #endif
-
-
     int size = compiler_add_const(compiler, constant);
     compiler_write_byte(compiler, size);
+}
+
+static vm_string* intern(VM* vm, const solid_str* s) {
+    vm_string* found = table_find_string(vm->strings, SOLID_STR_TO_C(*s), s->hash);
+    if (found) return found;
+    vm_string* created = vm_string_create(SOLID_STR_TO_C(*s));
+    table_set(vm->strings, created, lobj_num(1));
+    return created;
+}
+
+static vm_function* link_unit(const Compiler* compiler, CompileUnit* cu, VM* vm) {
+    const size_t n = darray_size(cu->constants);
+    lobj* values = malloc(sizeof(lobj) * (n ? n : 1));
+    for (size_t i = 0; i < n; i++) {
+        const Const* k = &darray_item(cu->constants, i);
+        switch (k->tag) {
+            case K_NUM: values[i] = lobj_num(k->as.num); break;
+            case K_STR: values[i] = into_lobj(intern(vm, &darray_item(compiler->strings, k->as.str))); break;
+            case K_FN:  values[i] = into_lobj(link_unit(compiler, k->as.fn, vm)); break;
+        }
+    }
+    solid_str name = solid_str_new(cu->name);
+    vm_function* fn = vm_function_create(cu->bytes.item, darray_size(cu->bytes),
+                                         values, n, cu->arity,
+                                         into_lobj(intern(vm, &name)), cu->upvalue_count);
+    solid_str_free(&name);
+    return fn;
+}
+
+lobj compiler_link(Compiler* compiler, VM* vm) {
+    CompileUnit* main_unit = compiler->current_unit;
+    if (main_unit == NULL || main_unit->enclosing != NULL) {
+        printf("compiler_link: expected the __main__ unit\n");
+        exit(1);
+    }
+    darray_push(main_unit->bytes, I_RETURN);
+
+    // objects built here aren't reachable from any root until vm_exec runs
+    // main, so a collection in between would free them
+    const bool was_paused = gc.paused;
+    gc.paused = true;
+    lobj main = into_lobj(vm_closure_create(link_unit(compiler, main_unit, vm)));
+    gc.paused = was_paused;
+    return main;
 }
 
 
@@ -341,7 +371,7 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
     return -1;
 }
 
-void compiler_rebind_localsymbol(const Compiler* compiler, char* symbol) {
+void compiler_rebind_localsymbol(Compiler* compiler, char* symbol) {
     const CompileUnit* cur_unit = compiler->current_unit;
     const LocalChart* lc = cur_unit->locals_chart;
 
@@ -358,8 +388,7 @@ void compiler_rebind_localsymbol(const Compiler* compiler, char* symbol) {
         printf("emitting symbol: I_SET_UPVALUE %s, %d\n",symbol, arg); ;
 #endif
     } else {
-        vm_string* s  = compiler_fetch_string(compiler, symbol);
-        const int str_loc = compiler_add_const(compiler, into_lobj(s));
+        const int str_loc = compiler_add_const(compiler, const_str(compiler_fetch_string(compiler, symbol)));
         op = I_SET_GLOBAL;
         arg = str_loc;
 
@@ -372,7 +401,7 @@ void compiler_rebind_localsymbol(const Compiler* compiler, char* symbol) {
 
 }
 
-void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
+void compiler_resolve_symbol(Compiler *compiler, const char* name) {
 
     const LocalChart* lc = compiler->current_unit->locals_chart;
     int arg = localchart_resolve_symbol(lc, name);
@@ -393,7 +422,7 @@ void compiler_resolve_symbol(const Compiler *compiler, const char* name) {
     }
     else {
         // str dupe symbol
-        arg = compiler_add_const(compiler, into_lobj(compiler_fetch_string(compiler, name)));
+        arg = compiler_add_const(compiler, const_str(compiler_fetch_string(compiler, name)));
         compiler_write_byte(compiler,I_GET_GLOBAL);
         compiler_write_byte(compiler, arg);
 #ifdef DEBUG_COMPILER
@@ -407,21 +436,15 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
     SExpr *cur = sexpr;
     switch (cur->type) {
         case SEXPR_NUMBER: {
-            lobj snum = lobj_num(cur->value.number);
-#ifdef DEBUG_COMPILER
-            printf("emitting number: I_LOAD "); lobj_println(&snum);
-#endif
-            compiler_load_const(compiler, snum);
+            compiler_load_const(compiler, const_num(cur->value.number));
         } break;
         case SEXPR_SYMBOL: {
             compiler_resolve_symbol(compiler,cur->value.symbol);
         }
         break;
         case SEXPR_STRING: {
-            // strings are interned. I need someway to create a string 
-            // which is  
-            vm_string* resolved_vmstring = compiler_fetch_string(compiler, cur->value.string);
-            compiler_load_const(compiler, into_lobj(resolved_vmstring));
+            // strings are interned into compiler->strings, then into the vm at link time
+            compiler_load_const(compiler, const_str(compiler_fetch_string(compiler, cur->value.string)));
         }
         break;
         case SEXPR_LIST: {
@@ -503,19 +526,18 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         };
                     // else emit a 0, or falsy in this lang
                     } else {
-                        compiler_load_const(compiler, lobj_num(0));
+                        compiler_load_const(compiler, const_num(0));
                     }
 
                     compiler_write_byte(compiler, I_RETURN);
                     compiler_leave_scope(compiler);
                     // END WRITING TO NEW FUNCTION
                     //
-                    const lobj new_fn = compile_unit_get_fn(cu);
                     // Return to previous pointer as current unit.
                     compiler->current_unit = compiler->current_unit->enclosing;
 
                     // adding the closure unit into the constant pool
-                    compiler_load_const(compiler, new_fn);
+                    compiler_load_const(compiler, const_fn(cu));
                     compiler_write_byte(compiler,I_CLOSURE);
 
                     // writing upvalue information from new function to its enclosing function
@@ -537,8 +559,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_write_byte(compiler, I_SET_LOCAL);
                         compiler_write_byte(compiler, reg);
                     } else {
-                        vm_string* c = compiler_fetch_string(compiler, fn_name->value.symbol);
-                        const int str_loc = compiler_add_const(compiler, into_lobj(c));
+                        const int str_loc = compiler_add_const(compiler, const_str(compiler_fetch_string(compiler, fn_name->value.symbol)));
                         compiler_write_byte(compiler, I_SET_GLOBAL);
                         compiler_write_byte(compiler, str_loc);
                     }
@@ -625,8 +646,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
 
                     compiler_emit(compiler,value);
                     
-                    vm_string* vm_str = compiler_fetch_string(compiler, varname->value.symbol);
-                    const int str_loc = compiler_add_const(compiler, into_lobj(vm_str));
+                    const int str_loc = compiler_add_const(compiler, const_str(compiler_fetch_string(compiler, varname->value.symbol)));
                     compiler_write_byte(compiler, I_SET_GLOBAL);
                     compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
