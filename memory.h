@@ -6,6 +6,7 @@
 #include "table.h"
 #include "gc.h"
 
+#define FREE(type, ptr) reallocate(ptr, sizeof(type), 0)
 void* reallocate (void* ptr, size_t old_size, size_t new_size); 
 void mark_value(VM* vm, lobj lobj);
 void mark_object(VM* vm, vm_object* object);

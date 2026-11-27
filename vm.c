@@ -24,6 +24,7 @@ vm_upvalue* vm_upvalue_create(lobj* ref) {
     up->next=NULL;
     return up;
 }
+
 vm_string* vm_string_create(const char* contents) {
     vm_string* s = ALLOCATE(vm_string, 1);
     vm_object_init(&s->obj, OBJ_STR);
@@ -38,18 +39,23 @@ void vm_string_free(vm_string* s) {
 
 }
 vm_closure* vm_closure_create(vm_function* fn) {
+    /* The current order leaves a closure on gc.objs
+       with a garbage upvalues pointer when the second allocation triggers a collection. */
+
+    vm_upvalue** upvalues = ALLOCATE(vm_upvalue*, fn->upvalues_count);
+    // current tracking size
+    // zero out closure->upvalues. alocated first to avoid a trigger to gc 
+    for (int i = 0; i < fn->upvalues_count; i++) {
+        upvalues[i] = NULL;
+    }
+
     vm_closure* closure = ALLOCATE(vm_closure, 1);
     vm_object_init(&closure->obj, OBJ_CLOSURE);
     closure->upvalues_ct=fn->upvalues_count;
     // pointer to vm_function
     closure->fn=fn;
 
-    vm_upvalue** upvalues = ALLOCATE(vm_upvalue*, closure->upvalues_ct);
-    // current tracking size
-    // zero out closure->upvalues
-    for (int i = 0; i < closure->upvalues_ct; i++) {
-        upvalues[i] = NULL;
-    }
+
     closure->upvalues = upvalues;
 
     return closure;
@@ -107,23 +113,22 @@ void vm_object_free(vm_object* obj) {
         case OBJ_STR: { 
             vm_string * fn=(vm_string*)obj;
             solid_str_free(&fn->contents);
-            free(fn);
+            FREE(vm_string, fn);
         } break;
         case OBJ_FUNC : {
             vm_function* fn=(vm_function*)obj;
-            free(fn->name.v.obj);
-            free(fn);
+            FREE(vm_function, fn);
         } break;
         case OBJ_CLOSURE: {
-            // todo: do we need to free the function here?
-            const vm_closure* closure = (vm_closure*)obj;
-            vm_function* fn= closure->fn;
-            vm_object_free((vm_object*)fn);
-            // we don't free the underlying upvalues, that's up to the garbage collector in the future to do that
-            free(closure->upvalues);
+            vm_closure* closure = (vm_closure*)obj;
+            FREE_ARRAY(vm_upvalue*, closure->upvalues, closure->upvalues_ct);
+            FREE(vm_closure, closure);
         } break;
+        case OBJ_NATIVE: {
+            FREE(vm_native, obj);
+        }break;
         case OBJ_UPVALUE: {
-            free(obj);
+            FREE(vm_upvalue, obj);
         } break;
         case OBJ_USR: {
         } break;
@@ -131,23 +136,6 @@ void vm_object_free(vm_object* obj) {
             printf("Unknown object type to free");
         }break;
     }
-}
-
-void lobj_free(lobj* o) {
-  switch (o->type) {
-    /* Do nothing special for number type */
-    case LVAL_NUM: break;
-    /* For Err or Sym free the string data */
-    case LVAL_ERR:  break;
-    case LVAL_SYM: break;
-    case LVAL_OBJ: {
-        vm_object_free(o->v.obj);
-    } break;
-    
-    }
-  /* Free the memory allocated for the "lval" struct itself */
-  /* when we create heap objs this will be necessary*/
-  //free(o);
 }
 
 /* Print an "lobj" */
@@ -260,35 +248,32 @@ lobj WAF_PRINT(int argc, lobj* args) {
     return lobj_num(0);
 }
 
-void vm_def_native(VM* vm, const char* symbol, vm_native* nativeobj) {
-    vm_string* vbs = vm_string_create(symbol);
-    vm_string* interned = table_find_string(vm->strings, SOLID_STR_TO_C(vbs->contents), vbs->contents.hash);
+void vm_def_native(VM* vm, const char* symbol, int argc, native_func fn) {
 
-    if (interned == NULL) {
-        table_set(vm->strings, vbs, lobj_num(1));
-        interned = vbs;
+    vm_string* name = table_find_string(vm->strings, symbol, hash_str(symbol, strlen(symbol)));
+    if (name == NULL) {
+        name = vm_string_create(symbol); // not rooted yet.
+        vm_push(vm, into_lobj(name)); // rooted now
+        table_set(vm->strings, name, lobj_num(1)); // interned (weak table, so this doesn't root it)
     } else {
-        vm_string_free(vbs);
+        vm_push(vm, into_lobj(name));
     }
     
-    vm_push(vm, into_lobj(interned));
-    vm_push(vm, into_lobj(nativeobj));
-    // The order in which the two vm_pop calls are evaluated is unspecified in C.
-    // Apple clang on arm64 evaluates left to right,
-    // The first pop returns the 32-byte vm_native, which is cast to vm_string* and used as the key.
-    // find_entry then reads k->contents.hash past the end of that allocation. The "print" string becomes the value.
-    lobj v = vm_pop(vm);
-    lobj k = vm_pop(vm);
-    table_set(vm->globals, AS_STR(k), v);
+    vm_push(vm, into_lobj(vm_native_create(argc, fn)));   
+    table_set(vm->globals, AS_STR(vm->stack_top[-2]), vm->stack_top[-1]);
+    // globals roots both now, so popping is safe
+    vm_pop(vm);
+    vm_pop(vm);
 }
 
-void vm_create(VM* vm, HashTable* globals, HashTable* strings) {
+void vm_create(VM* vm) {
     reset_stack(vm);
     vm->frame_count=0;
     vm->open_upvalues = NULL;
     // tables should be already initiated
-    vm->globals = globals;
-    vm->strings = strings;
+    vm->globals = table_create();
+    // intern string
+    vm->strings = table_create();
         
 
     vm->gray_capacity=0;
@@ -296,7 +281,7 @@ void vm_create(VM* vm, HashTable* globals, HashTable* strings) {
     vm->gray_stack = NULL;
 
     // define print function
-    vm_def_native(vm, "print", vm_native_create(1, WAF_PRINT));
+    vm_def_native(vm, "print", 1, WAF_PRINT);
         
 }
 

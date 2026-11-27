@@ -19,7 +19,6 @@ void* reallocate (void* ptr, size_t old_size, size_t new_size) {
     }
 
 #ifdef DEBUG_STRESS_GC
-     printf("[GC] stress test\n");
      collect_garbage(gc.vm);
 #endif
      if(gc.bytes_allocated > gc.next_gc) {
@@ -89,6 +88,9 @@ void mark_roots(VM* vm) {
        upvalue = upvalue->next) {
     mark_object(vm,(vm_object*)upvalue);
   }
+
+
+  // mark table as roots source
   mark_table(vm, vm->globals);
 }
 
@@ -155,6 +157,12 @@ void sweep() {
 }
 
 void collect_garbage(VM* vm) {
+    if(!gc.is_init) {
+        #ifdef DEBUG_LOG_GC
+          printf("gc not init\n");
+        #endif
+        return;
+    }
     #ifdef DEBUG_LOG_GC
       printf("-- collecting gc\n");
       size_t before = gc.bytes_allocated;
