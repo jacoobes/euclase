@@ -52,6 +52,9 @@ struct CompileUnit {
     int upvalue_count;
 
     LocalChart* locals_chart;
+    // values the VM will have in this frame at the current emit point, slot 0
+    // (the callee) included. A new local's slot is stack_depth - 1.
+    int stack_depth;
     //owned: need to free this
     char* name;
     int arity;
@@ -91,7 +94,9 @@ void compiler_enter_scope(const Compiler* lc);
 int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruction);
 
 int localchart_resolve_symbol(const LocalChart* lc, const char* symbol);
-int localchart_insert(LocalChart *lc, const char* symbol);
+int localchart_insert(LocalChart *lc, const char* symbol, int slot);
+// writes an opcode and applies its stack effect to stack_depth
+void compiler_emit_op(const Compiler* compiler, enum Instruction op);
 
 void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc);
 void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_loc);

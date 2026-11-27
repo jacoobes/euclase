@@ -49,19 +49,25 @@ void localchart_free(LocalChart* lc) {
     free(lc);
 }
 
-int localchart_resolve_symbol(const LocalChart* lc, const char* symbol) {
+// index into lc->locals of the innermost visible local named symbol, or -1
+static int localchart_find(const LocalChart* lc, const char* symbol) {
     int found = -1;
-
-    Local* local;
-    darray_foreach(local, lc->locals) {
+    for (int i = 0; i < (int)darray_size(lc->locals); i++) {
+        const Local* local = &darray_item(lc->locals, i);
         if(local->depth <= lc->cur_depth && strcmp(symbol, SOLID_STR_TO_C(local->name)) == 0) {
-            found = local->reg;
+            found = i;
         }
     }
-    //printf("Found %d\n", found);
     return found;
 }
-int localchart_insert(LocalChart *lc, const char* symbol) {
+
+// stack slot of symbol, or -1
+int localchart_resolve_symbol(const LocalChart* lc, const char* symbol) {
+    const int i = localchart_find(lc, symbol);
+    return i == -1 ? -1 : darray_item(lc->locals, i).reg;
+}
+// binds symbol to stack slot `slot`; returns slot, or -1 if already bound in this scope
+int localchart_insert(LocalChart *lc, const char* symbol, int slot) {
     if(darray_size(lc->locals) == 256) {
         fprintf(stderr, "Variable overflow. Reached maximum variables per scope (256)");
         exit(1);
@@ -72,10 +78,8 @@ int localchart_insert(LocalChart *lc, const char* symbol) {
             return -1;
         }
     }
-    const int prev_size = darray_size(lc->locals);
-    const Local new_local = local_create(solid_str_new(symbol), lc->cur_depth, prev_size);
-    darray_push(lc->locals, new_local);
-    return prev_size;
+    darray_push(lc->locals, local_create(solid_str_new(symbol), lc->cur_depth, slot));
+    return slot;
 }
 // name is duplicated, need to manage memory
 CompileUnit* compileunit_create(CompileUnit* enclosing, const char* name, const int arity) {
@@ -93,6 +97,7 @@ CompileUnit* compileunit_create(CompileUnit* enclosing, const char* name, const 
 
     cu->arity=arity;
     cu->locals_chart = lc;
+    cu->stack_depth = 1 + arity; // callee, then its arguments
 
     cu->upvalue_count = 0;
 
@@ -145,6 +150,26 @@ int compiler_write_byte(const Compiler *compiler, const uint8_t byte) {
     return darray_size(cur_unit->bytes)-1;
 }
 
+// net change in stack size for each opcode, read off vm.c. I_CALL is 0 here:
+// its effect depends on argc, so the call site applies it.
+static int stack_effect(enum Instruction op) {
+    switch (op) {
+        case I_LOAD: case I_GET_LOCAL: case I_GET_UPVALUE: case I_GET_GLOBAL:
+            return 1;
+        case I_ADD: case I_SUB: case I_MUL: case I_DIV: case I_MOD:
+        case I_LTE: case I_GT: case I_STR_ADD:
+        case I_POP: case I_CLOSE_UPVALUE: case I_RETURN:
+            return -1;
+        default: // NEGATE, SET_*, JMP*, LOOP, CLOSURE (pops fn, pushes closure), CALL
+            return 0;
+    }
+}
+
+void compiler_emit_op(const Compiler* compiler, enum Instruction op) {
+    compiler_write_byte(compiler, op);
+    compiler->current_unit->stack_depth += stack_effect(op);
+}
+
 // ponytail: linear scan, swap for a hash map if compiling big programs gets slow
 int compiler_fetch_string(Compiler* compiler, const char* symbol) {
     const uint32_t hash = hash_str(symbol, strlen(symbol));
@@ -172,7 +197,7 @@ int compiler_add_const(const Compiler *compiler, const Const value) {
 
 // emits I_LOAD and adds constant to current unit's compiler pool
 void compiler_load_const(const Compiler* compiler, Const constant) {
-    compiler_write_byte(compiler, I_LOAD);
+    compiler_emit_op(compiler, I_LOAD);
 #ifdef DEBUG_COMPILER
     switch (constant.tag) {
         case K_NUM: printf("I_LOAD %g", constant.as.num); break;
@@ -257,24 +282,13 @@ size_t compiler_leave_scope(Compiler* compiler) {
     }
     lc->cur_depth--;
 
+    // only drops the scope's locals from the chart. Callers emit the stack
+    // cleanup, since only they know where the scope's result is.
     int removed = 0;
     while(lc->locals.size != 0) {
-        const Local* cur = &(darray_item(lc->locals, darray_size(lc->locals) - 1));
+        Local* cur = &(darray_item(lc->locals, darray_size(lc->locals) - 1));
         if(cur->depth <= lc->cur_depth) break;
-
-        // if the local was captured by a scope lower, we close it
-        if (cur->is_captured) {
-            compiler_write_byte(compiler, I_CLOSE_UPVALUE); 
-#ifdef DEBUG_COMPILER
-        printf("ScopeLeave: I_CLOSE_UPVALUE %s\n", SOLID_STR_TO_C(cur->name));
-#endif
-        } else {
-            compiler_write_byte(compiler, I_POP);
-#ifdef DEBUG_COMPILER
-        //printf("ScopeLeave: I_POP %s\n", SOLID_STR_TO_C(cur->name));
-#endif
-        };
-
+        solid_str_free(&cur->name);
         darray_pop(lc->locals);
         removed++;
     }
@@ -289,7 +303,7 @@ void compiler_enter_scope(const Compiler* compiler) {
 }
 
 int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruction) {
-    compiler_write_byte(compiler,instruction); //0
+    compiler_emit_op(compiler,instruction); //0
     //short
     int jmp_instruct_loc = compiler_write_byte(compiler, 0xff); //1 placeholder
                            compiler_write_byte(compiler, 0xff); //2 placeholder
@@ -326,7 +340,7 @@ static inline void emit_bin_op(Compiler* compiler, const enum Instruction op, SE
         SExpr* hd = sexpr_list_first(cur);
         compiler_emit(compiler, hd);
     }
-    compiler_write_byte(compiler, op);
+    compiler_emit_op(compiler, op);
 }
 
 
@@ -359,14 +373,14 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
         return -1;
     }
     const LocalChart* enclosing_localchart = cu->enclosing->locals_chart;
-    const int result = localchart_resolve_symbol(enclosing_localchart, symbol);
+    const int result = localchart_find(enclosing_localchart, symbol);
     if (result != -1) { // if it is not a local
 #ifdef DEBUG_COMPILER
         printf("UpvalueResolution: Found local '%s' in enclosing local chart.\n", symbol);
 #endif
         Local* captured_local = &(darray_item(enclosing_localchart->locals, result));
         captured_local->is_captured = true;
-        return add_upvalue(cu, (uint8_t)result, true);
+        return add_upvalue(cu, (uint8_t)captured_local->reg, true);
     }
 
     const int res = resolve_upvalue(cu->enclosing, symbol); // recursively check enclosing compile unit
@@ -407,7 +421,7 @@ void compiler_rebind_localsymbol(Compiler* compiler, char* symbol) {
         printf("emitting symbol: I_SET_GLOBAL %s, %d\n",symbol, arg); ;
 #endif
     }
-    compiler_write_byte(compiler, op);
+    compiler_emit_op(compiler, op);
     compiler_write_byte(compiler, (uint8_t)arg);
 
 }
@@ -421,11 +435,11 @@ void compiler_resolve_symbol(Compiler *compiler, const char* name) {
 #ifdef DEBUG_COMPILER
         printf("emitting symbol: I_GET_LOCAL %s, %d\n", name, arg); ;
 #endif
-        compiler_write_byte(compiler,  I_GET_LOCAL);
+        compiler_emit_op(compiler,  I_GET_LOCAL);
         compiler_write_byte(compiler,  arg);
     }
     else if ((arg = resolve_upvalue(compiler->current_unit, name)) != -1) {
-        compiler_write_byte(compiler,  I_GET_UPVALUE);
+        compiler_emit_op(compiler,  I_GET_UPVALUE);
         compiler_write_byte(compiler,  arg);
 #ifdef DEBUG_COMPILER
         printf("emitting symbol: I_GET_UPVALUE %s, %d\n", name, arg); ;
@@ -434,7 +448,7 @@ void compiler_resolve_symbol(Compiler *compiler, const char* name) {
     else {
         // str dupe symbol
         arg = compiler_add_const(compiler, const_str(compiler_fetch_string(compiler, name)));
-        compiler_write_byte(compiler,I_GET_GLOBAL);
+        compiler_emit_op(compiler,I_GET_GLOBAL);
         compiler_write_byte(compiler, arg);
 #ifdef DEBUG_COMPILER
         printf("emitting symbol: I_GET_GLOBAL %s, %d\n", name, arg); ;
@@ -521,7 +535,9 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             printf("arg must be simple symbol\n");
                             exit(1);
                         }
-                        if(localchart_insert(compiler->current_unit->locals_chart, el->value.symbol) == -1) {
+                        // params sit right after the callee: slots 1..arity
+                        const int slot = darray_size(compiler->current_unit->locals_chart->locals);
+                        if(localchart_insert(compiler->current_unit->locals_chart, el->value.symbol, slot) == -1) {
                             printf("Special form 'fn' error: duplicate argument '%s'\n", el->value.symbol);
                             exit(1);
                         }
@@ -540,7 +556,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         compiler_load_const(compiler, const_num(0));
                     }
 
-                    compiler_write_byte(compiler, I_RETURN);
+                    compiler_emit_op(compiler, I_RETURN);
                     compiler_leave_scope(compiler);
                     // END WRITING TO NEW FUNCTION
                     //
@@ -549,7 +565,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
 
                     // adding the closure unit into the constant pool
                     compiler_load_const(compiler, const_fn(cu));
-                    compiler_write_byte(compiler,I_CLOSURE);
+                    compiler_emit_op(compiler,I_CLOSURE);
 
                     // writing upvalue information from new function to its enclosing function
                     for (int i = 0; i < cu->upvalue_count; i++) {
@@ -562,16 +578,17 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     }
 
                     if (compiler->current_unit->enclosing != NULL) {
-                        const int reg = localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol);
-                        if (reg == -1) {
+                        // the closure is already on top of the stack: that slot is the local
+                        // ponytail: a fn in argument position (#43 point 3) still gets a local
+                        // whose slot dies when the call consumes it; harmless unless named later
+                        const int slot = compiler->current_unit->stack_depth - 1;
+                        if (localchart_insert(compiler->current_unit->locals_chart, fn_name->value.symbol, slot) == -1) {
                             fprintf(stderr,"function already declared\n");
                             exit(1);
                         }
-                        compiler_write_byte(compiler, I_SET_LOCAL);
-                        compiler_write_byte(compiler, reg);
                     } else {
                         const int str_loc = compiler_add_const(compiler, const_str(compiler_fetch_string(compiler, fn_name->value.symbol)));
-                        compiler_write_byte(compiler, I_SET_GLOBAL);
+                        compiler_emit_op(compiler, I_SET_GLOBAL);
                         compiler_write_byte(compiler, str_loc);
                     }
                 }
@@ -597,6 +614,13 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             exit(1);
                     }
                     compiler_enter_scope(compiler);
+                    CompileUnit* cu = compiler->current_unit;
+                    // reserve the slot the let's result ends up in, below the locals, so
+                    // storing the result never overwrites a local a closure still sees.
+                    // ponytail: one extra LOAD per let; skip it when no local is captured
+                    // if that ever matters (needs the capture info before emitting)
+                    compiler_load_const(compiler, const_num(0));
+                    const int result_slot = cu->stack_depth - 1;
 
                     SExpr* cur_exp;
                     sexpr_list_foreach(cur_exp, bindings) {
@@ -614,19 +638,14 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         SExpr* rhs = sexpr_list_first(next);
                         compiler_emit(compiler, rhs);
 
-                        LocalChart* lc = compiler->current_unit->locals_chart;
-                        int reg = localchart_insert(lc, lhs->value.symbol);
-                        if (reg == -1) {
+                        // the value is on top of the stack: that slot becomes the local
+                        LocalChart* lc = cu->locals_chart;
+                        if (localchart_insert(lc, lhs->value.symbol, cu->stack_depth - 1) == -1) {
                             // name already bound earlier in this let: the later binding
-                            // overwrites it. The new value was pushed into a stack slot no
-                            // local owns, so pop it to keep later locals' slots aligned.
-                            reg = localchart_resolve_symbol(lc, lhs->value.symbol);
-                            compiler_write_byte(compiler, I_SET_LOCAL);
-                            compiler_write_byte(compiler, reg);
-                            compiler_write_byte(compiler, I_POP);
-                        } else {
-                            compiler_write_byte(compiler, I_SET_LOCAL);
-                            compiler_write_byte(compiler, reg);
+                            // overwrites it, and the pushed copy is dropped
+                            compiler_emit_op(compiler, I_SET_LOCAL);
+                            compiler_write_byte(compiler, localchart_resolve_symbol(lc, lhs->value.symbol));
+                            compiler_emit_op(compiler, I_POP);
                         }
                         cur_exp = next;
                     }
@@ -635,8 +654,24 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     sexpr_list_foreach(b_form, let_body) {
                         compiler_emit(compiler, sexpr_list_first(b_form));
                     }
+                    if (sexpr_list_len(let_body) == 0) {
+                        compiler_load_const(compiler, const_num(0));
+                    }
 
-                    //compiler_leave_scope(compiler);
+                    // leave: like Emacs' discardN-preserve-tos. Store the result in the
+                    // reserved slot, then drop everything above it, closing captured locals.
+                    compiler_emit_op(compiler, I_SET_LOCAL);
+                    compiler_write_byte(compiler, result_slot);
+                    while (cu->stack_depth - 1 > result_slot) {
+                        const int slot = cu->stack_depth - 1;
+                        bool captured = false;
+                        Local* l;
+                        darray_foreach(l, cu->locals_chart->locals) {
+                            if (l->depth == (size_t)cu->locals_chart->cur_depth && l->reg == slot) captured = l->is_captured;
+                        }
+                        compiler_emit_op(compiler, captured ? I_CLOSE_UPVALUE : I_POP);
+                    }
+                    compiler_leave_scope(compiler);
 
                 } else if (strcmp(symbol, "var") == 0) { //global variable
                     if(rest == NULL) {
@@ -658,7 +693,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     compiler_emit(compiler,value);
                     
                     const int str_loc = compiler_add_const(compiler, const_str(compiler_fetch_string(compiler, varname->value.symbol)));
-                    compiler_write_byte(compiler, I_SET_GLOBAL);
+                    compiler_emit_op(compiler, I_SET_GLOBAL);
                     compiler_write_byte(compiler, str_loc);
                 }  else if (strcmp(symbol, "if") == 0) {
 
@@ -681,7 +716,8 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     int cur_size = BYTE_LEN;
                     rest = sexpr_list_rest(rest);
 
-                    //true val
+                    //true val; only one arm runs, so the else arm starts from the same depth
+                    const int arm_depth = compiler->current_unit->stack_depth;
                     compiler_emit(compiler, sexpr_list_first(rest));
                     const int ushort_true = compiler_jump_emit(compiler, I_JMP);
                     // we can patch the jmp needed after processing truth branch by getting difference
@@ -690,6 +726,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
 
 
                     cur_size = BYTE_LEN;
+                    compiler->current_unit->stack_depth = arm_depth;
                     //false val
                     compiler_emit(compiler, sexpr_list_first(sexpr_list_rest(rest)));
                     const size_t cur_location = BYTE_LEN - cur_size;
@@ -723,7 +760,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         jumps[jump_count] = compiler_jump_emit(compiler, I_JMP_FALSY);
                         jump_ends[jump_count] = BYTE_LEN; // offsets are measured from after the jump
                         jump_count++;
-                        compiler_write_byte(compiler, I_POP); // I_JMP_FALSY only peeks
+                        compiler_emit_op(compiler, I_POP); // I_JMP_FALSY only peeks
                         compiler_emit(compiler, sexpr_list_first(next));
                     }
                     for (int j = 0; j < jump_count; j++) {
@@ -745,15 +782,18 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     const int loop_back_loc = BYTE_LEN;
                     compiler_emit(compiler, sexpr_list_first(rest));
                     const int ushort_begin = compiler_jump_emit(compiler, I_JMP_FALSY); // returns where the ushort begins +2
-                    compiler_write_byte(compiler, I_POP);
+                    // the exit path jumps here with the condition still on the stack
+                    const int exit_depth = compiler->current_unit->stack_depth;
+                    compiler_emit_op(compiler, I_POP);
 
                     SExpr* cur_exp;
                     sexpr_list_foreach(cur_exp, sexpr_list_rest(rest)) {
                         compiler_emit(compiler, sexpr_list_first(cur_exp));
-                        compiler_write_byte(compiler, I_POP);
+                        compiler_emit_op(compiler, I_POP);
                     }
 
-                    compiler_write_byte(compiler, I_LOOP);
+                    compiler_emit_op(compiler, I_LOOP);
+                    compiler->current_unit->stack_depth = exit_depth;
                     compileunit_write_ushort(compiler->current_unit, BYTE_LEN - loop_back_loc + 2);
                     compiler_jump_patch(compiler, ushort_begin, BYTE_LEN-ushort_begin-2);
                     #undef BYTE_LEN
@@ -795,8 +835,9 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     }
 
                     // need to emit I_CALL N where N is number of args
-                    compiler_write_byte(compiler, I_CALL);
+                    compiler_emit_op(compiler, I_CALL);
                     compiler_write_byte(compiler, argc);
+                    compiler->current_unit->stack_depth -= argc; // callee + args -> result
 #ifdef DEBUG_COMPILER
                     printf("emitting: I_CALL %d for %s\n", argc, symbol);
 #endif
