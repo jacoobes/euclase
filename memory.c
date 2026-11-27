@@ -88,6 +88,9 @@ void mark_roots(VM* vm) {
        upvalue = upvalue->next) {
     mark_object(vm,(vm_object*)upvalue);
   }
+
+
+  // mark table as roots source
   mark_table(vm, vm->globals);
 }
 

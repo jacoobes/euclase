@@ -1,0 +1,127 @@
+; GC stress test. Every section prints a value you can check by hand; if the GC
+; frees something still in use, the numbers go wrong (or ASan reports it).
+;
+; Build with DEBUG_STRESS_GC so every allocation collects, then:
+;   xmake run -w . main -e sample/lang/gc-stress.euc
+;
+; Expected output, in order:
+;   1060  8  465  240  1275  101  ... 'gc survived'  137  101  8  'gc survived'
+;
+; ---------- building blocks ----------
+
+; four-level curry: c3/c4 capture `a`/`b` through their parent's upvalues
+; (the non-local, isLocal=0 path of I_CLOSURE)
+(fn (curry4 (a))
+  (fn (c2 (b))
+    (fn (c3 (c))
+      (fn (c4 (d))
+        (+ (+ a b) (+ c d))))))
+
+; a closure stored inside another closure's upvalue: tracing has to go
+; closure -> upvalue -> closed value -> closure -> function
+(fn (twice (f))
+  (fn (tw (x)) (f (f x))))
+
+(fn (inc1 (x)) (+ x 1))
+
+(fn (adder (x))
+  (fn (ad (y)) (+ x y)))
+
+; two sibling closures share one upvalue `n`; only `get` escapes, so `inc`
+; becomes garbage while the upvalue must stay alive through `get`
+(fn (mkshared (n))
+  (fn (inc (d)) (@n (+ n d)))
+  (fn (get ()) n)
+  (inc 100)
+  get)
+
+; long-lived mutable counter, kept in a global across every collection
+(fn (counter (n))
+  (fn (bump (d)) (@n (+ n d))))
+
+; a string constant reachable only through a closure's function
+(fn (greeter ())
+  (fn (g ()) "gc survived"))
+
+; ---------- long-lived roots (globals) ----------
+
+(var tally (counter 0))
+(var reader (mkshared 1))
+(var t1 (twice inc1))
+(var t2 (twice t1))
+(var t3 (twice t2))
+(var msg (greeter))
+
+; ---------- garbage generators ----------
+
+; builds and drops a 4-closure chain per iteration: sum of (i + 6), i = 1..40
+(fn (curryloop (n))
+  (let (acc 0)
+    (while n
+      (let (f2 (curry4 n)
+            f3 (f2 1)
+            f4 (f3 2))
+        (@acc (+ acc (f4 3)))
+        (tally 1)
+        (@n (- n 1))))
+    acc))
+
+; recursion: every frame keeps a fresh closure live on the stack while the
+; frames below it allocate (and collect): sum 1..30
+(fn (sum (n))
+  (if (<= n 0) 0
+    (let (f (adder n))
+      (tally 1)
+      (f (sum (- n 1))))))
+
+; builds a 3-deep `twice` tower per call and drops it: +8 per call
+(fn (compose8 (x))
+  (let (a (twice inc1)
+        b (twice a)
+        c (twice b))
+    (c x)))
+
+(fn (composeloop (n))
+  (let (acc 0)
+    (while n
+      (let (k 0)
+        (@acc (compose8 acc))
+        (tally 1)
+        (@n (- n 1))))
+    acc))
+
+; one adder per iteration, dropped immediately: sum 1..50
+(fn (churn (n))
+  (let (acc 0)
+    (while n
+      (let (f (adder n))
+        (@acc (f acc))
+        (tally 1)
+        (@n (- n 1))))
+    acc))
+
+; makes and drops a shared-upvalue pair per iteration
+(fn (sharedloop (n))
+  (let (acc 0)
+    (while n
+      (let (g (mkshared n))
+        (@acc (g))
+        (tally 1)
+        (@n (- n 1))))
+    acc))
+
+; ---------- run ----------
+
+(print (curryloop 40))   ; 1060
+(print (t3 0))           ; 8
+(print (sum 30))         ; 465
+(print (composeloop 30)) ; 240
+(print (churn 50))       ; 1275
+(print (sharedloop 7))   ; 101  (last iteration is n = 1: 1 + 100)
+(print (msg))            ; 'gc survived'
+
+; the long-lived roots, after all that garbage
+(print (tally 0))        ; 137 = 40 + 30 + 30 + 30 + 7
+(print (reader))         ; 101
+(print (t3 0))           ; 8
+(print (msg))            ; 'gc survived'

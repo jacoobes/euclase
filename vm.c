@@ -113,24 +113,22 @@ void vm_object_free(vm_object* obj) {
         case OBJ_STR: { 
             vm_string * fn=(vm_string*)obj;
             solid_str_free(&fn->contents);
-            free(fn);
+            FREE(vm_string, fn);
         } break;
         case OBJ_FUNC : {
             vm_function* fn=(vm_function*)obj;
-            free(fn->name.v.obj);
-            free(fn);
+            FREE(vm_function, fn);
         } break;
         case OBJ_CLOSURE: {
-            const vm_closure* closure = (vm_closure*)obj;
-             
-            uint8_t i = 0;
-            while(i < closure->upvalues_ct) {
-                vm_object_free((vm_object*)closure->upvalues[i]); i++; 
-            }
-            free((vm_object*)closure);
+            vm_closure* closure = (vm_closure*)obj;
+            FREE_ARRAY(vm_upvalue*, closure->upvalues, closure->upvalues_ct);
+            FREE(vm_closure, closure);
         } break;
+        case OBJ_NATIVE: {
+            FREE(vm_native, obj);
+        }break;
         case OBJ_UPVALUE: {
-            free(obj);
+            FREE(vm_upvalue, obj);
         } break;
         case OBJ_USR: {
         } break;
@@ -250,26 +248,22 @@ lobj WAF_PRINT(int argc, lobj* args) {
     return lobj_num(0);
 }
 
-void vm_def_native(VM* vm, const char* symbol, vm_native* nativeobj) {
-    vm_string* vbs = vm_string_create(symbol);
-    vm_string* interned = table_find_string(vm->strings, SOLID_STR_TO_C(vbs->contents), vbs->contents.hash);
+void vm_def_native(VM* vm, const char* symbol, int argc, native_func fn) {
 
-    if (interned == NULL) {
-        table_set(vm->strings, vbs, lobj_num(1));
-        interned = vbs;
+    vm_string* name = table_find_string(vm->strings, symbol, hash_str(symbol, strlen(symbol)));
+    if (name == NULL) {
+        name = vm_string_create(symbol); // not rooted yet.
+        vm_push(vm, into_lobj(name)); // rooted now
+        table_set(vm->strings, name, lobj_num(1)); // interned (weak table, so this doesn't root it)
     } else {
-        vm_string_free(vbs);
+        vm_push(vm, into_lobj(name));
     }
     
-    vm_push(vm, into_lobj(interned));
-    vm_push(vm, into_lobj(nativeobj));
-    // The order in which the two vm_pop calls are evaluated is unspecified in C.
-    // Apple clang on arm64 evaluates left to right,
-    // The first pop returns the 32-byte vm_native, which is cast to vm_string* and used as the key.
-    // find_entry then reads k->contents.hash past the end of that allocation. The "print" string becomes the value.
-    lobj v = vm_pop(vm);
-    lobj k = vm_pop(vm);
-    table_set(vm->globals, AS_STR(k), v);
+    vm_push(vm, into_lobj(vm_native_create(argc, fn)));   
+    table_set(vm->globals, AS_STR(vm->stack_top[-2]), vm->stack_top[-1]);
+    // globals roots both now, so popping is safe
+    vm_pop(vm);
+    vm_pop(vm);
 }
 
 void vm_create(VM* vm) {
@@ -278,6 +272,7 @@ void vm_create(VM* vm) {
     vm->open_upvalues = NULL;
     // tables should be already initiated
     vm->globals = table_create();
+    // intern string
     vm->strings = table_create();
         
 
@@ -286,7 +281,7 @@ void vm_create(VM* vm) {
     vm->gray_stack = NULL;
 
     // define print function
-    vm_def_native(vm, "print", vm_native_create(1, WAF_PRINT));
+    vm_def_native(vm, "print", 1, WAF_PRINT);
         
 }
 
