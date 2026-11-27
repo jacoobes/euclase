@@ -129,9 +129,11 @@ vm_string* table_find_string(HashTable* table, const char* ss, uint32_t hash) {
   }
 }
 
-void table_free(HashTable* table) {
-    FREE_ARRAY(TableEntry, table->entries, table->count);
-    table_create(table);
+void table_free(HashTable* tbl) {
+    FREE_ARRAY(TableEntry, tbl->entries, tbl->count);
+    tbl->count = 0;
+    tbl->capacity=0; 
+    tbl->entries=NULL;
 }
 
 void table_print(HashTable* table) {

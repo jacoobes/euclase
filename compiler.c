@@ -189,7 +189,10 @@ static vm_string* intern(VM* vm, const solid_str* s) {
     vm_string* found = table_find_string(vm->strings, SOLID_STR_TO_C(*s), s->hash);
     if (found) return found;
     vm_string* created = vm_string_create(SOLID_STR_TO_C(*s));
+    // vm->strings is weak and table_set can allocate (collect), so root it
+    vm_push(vm, into_lobj(created));
     table_set(vm->strings, created, lobj_num(1));
+    vm_pop(vm);
     return created;
 }
 
@@ -199,16 +202,26 @@ static vm_function* link_unit(const Compiler* compiler, CompileUnit* cu, VM* vm)
     for (size_t i = 0; i < n; i++) {
         const Const* k = &darray_item(cu->constants, i);
         switch (k->tag) {
-            case K_NUM: values[i] = lobj_num(k->as.num); break;
-            case K_STR: values[i] = into_lobj(intern(vm, &darray_item(compiler->strings, k->as.str))); break;
-            case K_FN:  values[i] = into_lobj(link_unit(compiler, k->as.fn, vm)); break;
+            case K_NUM: {
+                values[i] = lobj_num(k->as.num); 
+            } break;
+            case K_STR: {
+                values[i] = into_lobj(intern(vm, &darray_item(compiler->strings, k->as.str)));
+            } break;
+            case K_FN: {
+                values[i] = into_lobj(link_unit(compiler, k->as.fn, vm));
+            } break;
         }
+        vm_push(vm, values[i]); // mark as a root for gc to track.
     }
     solid_str name = solid_str_new(cu->name);
+    lobj nm = into_lobj(intern(vm, &name));
+    vm_push(vm, nm); // mark as a root for gc to track.
     vm_function* fn = vm_function_create(cu->bytes.item, darray_size(cu->bytes),
-                                         values, n, cu->arity,
-                                         into_lobj(intern(vm, &name)), cu->upvalue_count);
+                                         values, n, cu->arity, nm, cu->upvalue_count);
     solid_str_free(&name);
+    // n constants + the name; fn traces them from here on
+    for (size_t i = 0; i <= n; i++) vm_pop(vm);
     return fn;
 }
 
@@ -219,10 +232,13 @@ lobj compiler_link(Compiler* compiler, VM* vm) {
         exit(1);
     }
     darray_push(main_unit->bytes, I_RETURN);
-
-    // TODO: objects built here aren't reachable from any root until vm_exec
-    // runs main, so a collection in between frees them. Handled in the GC PR.
-    return into_lobj(vm_closure_create(link_unit(compiler, main_unit, vm)));
+    vm_function* fn = link_unit(compiler, main_unit, vm);
+    vm_push(vm, into_lobj(fn));   // unrooted while its closure is allocated
+    vm_closure* mainfn = vm_closure_create(fn);
+    vm_pop(vm);
+    // mainfn is unrooted until vm_exec puts it in a call frame (apply doesn't
+    // allocate), so nothing may allocate between here and vm_exec
+    return into_lobj(mainfn);
 }
 
 

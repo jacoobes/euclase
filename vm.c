@@ -24,6 +24,7 @@ vm_upvalue* vm_upvalue_create(lobj* ref) {
     up->next=NULL;
     return up;
 }
+
 vm_string* vm_string_create(const char* contents) {
     vm_string* s = ALLOCATE(vm_string, 1);
     vm_object_init(&s->obj, OBJ_STR);
@@ -38,18 +39,23 @@ void vm_string_free(vm_string* s) {
 
 }
 vm_closure* vm_closure_create(vm_function* fn) {
+    /* The current order leaves a closure on gc.objs
+       with a garbage upvalues pointer when the second allocation triggers a collection. */
+
+    vm_upvalue** upvalues = ALLOCATE(vm_upvalue*, fn->upvalues_count);
+    // current tracking size
+    // zero out closure->upvalues. alocated first to avoid a trigger to gc 
+    for (int i = 0; i < fn->upvalues_count; i++) {
+        upvalues[i] = NULL;
+    }
+
     vm_closure* closure = ALLOCATE(vm_closure, 1);
     vm_object_init(&closure->obj, OBJ_CLOSURE);
     closure->upvalues_ct=fn->upvalues_count;
     // pointer to vm_function
     closure->fn=fn;
 
-    vm_upvalue** upvalues = ALLOCATE(vm_upvalue*, closure->upvalues_ct);
-    // current tracking size
-    // zero out closure->upvalues
-    for (int i = 0; i < closure->upvalues_ct; i++) {
-        upvalues[i] = NULL;
-    }
+
     closure->upvalues = upvalues;
 
     return closure;
@@ -115,12 +121,13 @@ void vm_object_free(vm_object* obj) {
             free(fn);
         } break;
         case OBJ_CLOSURE: {
-            // todo: do we need to free the function here?
             const vm_closure* closure = (vm_closure*)obj;
-            vm_function* fn= closure->fn;
-            vm_object_free((vm_object*)fn);
-            // we don't free the underlying upvalues, that's up to the garbage collector in the future to do that
-            free(closure->upvalues);
+             
+            uint8_t i = 0;
+            while(i < closure->upvalues_ct) {
+                vm_object_free((vm_object*)closure->upvalues[i]); i++; 
+            }
+            free((vm_object*)closure);
         } break;
         case OBJ_UPVALUE: {
             free(obj);
@@ -131,23 +138,6 @@ void vm_object_free(vm_object* obj) {
             printf("Unknown object type to free");
         }break;
     }
-}
-
-void lobj_free(lobj* o) {
-  switch (o->type) {
-    /* Do nothing special for number type */
-    case LVAL_NUM: break;
-    /* For Err or Sym free the string data */
-    case LVAL_ERR:  break;
-    case LVAL_SYM: break;
-    case LVAL_OBJ: {
-        vm_object_free(o->v.obj);
-    } break;
-    
-    }
-  /* Free the memory allocated for the "lval" struct itself */
-  /* when we create heap objs this will be necessary*/
-  //free(o);
 }
 
 /* Print an "lobj" */
@@ -282,13 +272,13 @@ void vm_def_native(VM* vm, const char* symbol, vm_native* nativeobj) {
     table_set(vm->globals, AS_STR(k), v);
 }
 
-void vm_create(VM* vm, HashTable* globals, HashTable* strings) {
+void vm_create(VM* vm) {
     reset_stack(vm);
     vm->frame_count=0;
     vm->open_upvalues = NULL;
     // tables should be already initiated
-    vm->globals = globals;
-    vm->strings = strings;
+    vm->globals = table_create();
+    vm->strings = table_create();
         
 
     vm->gray_capacity=0;

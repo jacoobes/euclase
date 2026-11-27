@@ -48,8 +48,6 @@ char* read_file(const char *filename, size_t *size_read) {
 }
 
 
-
-
 int main(int argc, char **argv) {
     puts("Version 0.0.0.0.3");
     puts("Press Ctrl+c to Exit\n");
@@ -69,64 +67,35 @@ int main(int argc, char **argv) {
                 (print (s 20))
             );
 
-            const char* natives = QUOTE(
-                (print (+ 2 2)) 
-            );
-
-            const char* global_vars = QUOTE( 
-                (var a 5)
-                (+ a (+ 120 1))
-            );
-
-            const char* looper = QUOTE(
-                (let (a 10) 
-                    (while a 
-                        (@a (- a 1))))
-            );
 
             printf("program:\n '%s'\n", fib);
             size_t count;
             SExpr **exprs = read_all(fib, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
 
-            HashTable globals, strings;
-            table_create(&globals);
-            table_create(&strings);
 
-            VM vm;
-            gc_init(&vm);
-
-            vm_create(&vm, &globals, &strings);
-
-
-            Compiler compiler;
-            compiler_create(&compiler, &globals, &strings);
+            Compiler compiler; compiler_create(&compiler);
             for (size_t i = 0; i < count; i++) {
                 compiler_emit(&compiler, exprs[i]);
             }
-            compiler_destroy(&compiler);
 
+            VM vm; 
+            gc_init(&vm);
+            vm_create(&vm);
+
+            lobj main = compiler_link(&compiler, &vm);
+            
+
+            vm_exec(&vm, &main, 0);
+            vm_free(&vm);
+
+            gc_shutdown();
+
+            compiler_destroy(&compiler);
             // done with s expressions. we free all of them
             for(int i =0; i < count; i++) {
                 free_sexpr(exprs[i]);
             }
-
-            CompileUnit* main_fn= compiler.current_unit;
-            if(main_fn == NULL) {
-                printf("main function entry point not found");
-                exit(1);
-            }
-            darray_push(main_fn->bytes, I_RETURN);
-
-
-            lobj main = compile_unit_get_closure(main_fn);
-            
-
-            vm_exec(&vm, &main, 0);
-
-            vm_free(&vm);
-
-            gc_shutdown();
 
         } else {
             size_t read;
@@ -139,14 +108,6 @@ int main(int argc, char **argv) {
             size_t count;
             SExpr **exprs = read_all(program, &count); // or read appropriate function
             printf("Number of expressions: %zu\n", count);
-
-            
-            // the compiler allocates vm strings, and any allocation can
-            // collect, so the GC needs its VM before compiling (see the TODO
-            // on compiler_fetch_string)
-            VM vm;
-            gc_init(&vm);
-            vm_create(&vm, &globals, &strings);
 
             
             Compiler compiler; compiler_create(&compiler);
@@ -166,8 +127,13 @@ int main(int argc, char **argv) {
             }
             darray_push(main_fn->bytes, I_RETURN);
 
-
-            lobj main = compile_unit_get_closure(main_fn);
+            // the compiler allocates vm strings, and any allocation can
+            // collect, so the GC needs its VM before compiling (see the TODO
+            // on compiler_fetch_string)
+            VM vm;
+            gc_init(&vm);
+            vm_create(&vm);
+            lobj main = compiler_link(&compiler, &vm);
 #ifdef DEBUG_COMPILER
             uint8_t* b;
             darray_foreach(b, main_fn->bytes) {
@@ -184,7 +150,6 @@ int main(int argc, char **argv) {
 
             vm_free(&vm);
             free((void*)program);
-
 
             return 0;
         }

@@ -177,7 +177,7 @@ typedef struct VM {
  * @param strings
  * @param main A pointer to the main function (represented as an lobj) to be executed by the VM.
  */
-void vm_create(VM* vm, HashTable* globals, HashTable* strings);
+void vm_create(VM* vm);
 
 /**
  * Executes the virtual machine with the given configuration and flags.
@@ -257,15 +257,16 @@ vm_native* vm_native_create(
 );
 
 vm_closure* vm_closure_create( vm_function* fn);
-vm_string* vm_string_create( const char* contents);
+vm_string* vm_string_create(const char* contents);
 void vm_string_free(vm_string* s);
 vm_upvalue* vm_upvalue_create(lobj* location);
 void vm_object_free(vm_object*);
+void vm_push(VM* vm, lobj value);
+lobj vm_pop(VM* vm);
 
-lobj lobj_str( const char *);
+lobj lobj_str(const char *);
 lobj lobj_num(double x);
 lobj lobj_err(int err);
-void lobj_free(lobj*);
 void lobj_print(lobj*);
 void lobj_println(lobj*);
 

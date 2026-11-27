@@ -26,14 +26,9 @@ void gc_add_obj(vm_object* obj) {
         printf("obj is null while inserting into gc\n");
         exit(1);
     }
-    if(gc.objs == NULL) {
-        gc.objs = obj;
-    } else {
-        // attach object to linked list of all objects
-        // move pointer to added object
-        gc.objs->next = obj;
-        gc.objs = gc.objs->next;
-    }
+    // head insert: gc.objs is always the newest object and reaches every other one
+    obj->next = gc.objs;
+    gc.objs = obj;
 }
 
 
