@@ -125,11 +125,8 @@ int main(int argc, char **argv) {
                 printf("main function entry point not found");
                 exit(1);
             }
-            darray_push(main_fn->bytes, I_RETURN);
-
-            // the compiler allocates vm strings, and any allocation can
-            // collect, so the GC needs its VM before compiling (see the TODO
-            // on compiler_fetch_string)
+            // compiling makes no vm objects; compiler_link creates them (and
+            // appends main's I_RETURN), so the GC and VM only need to exist by then
             VM vm;
             gc_init(&vm);
             vm_create(&vm);
@@ -149,6 +146,7 @@ int main(int argc, char **argv) {
 
 
             vm_free(&vm);
+            gc_shutdown();
             free((void*)program);
 
             return 0;

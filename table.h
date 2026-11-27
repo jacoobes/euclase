@@ -28,7 +28,7 @@ typedef struct HashTable {
 } HashTable;
 
 
-HashTable* table_create();
+HashTable* table_create(void);
 int table_set(HashTable* tbl, vm_string*, lobj);
 int table_get(const HashTable* tbl, vm_string*, lobj*);
 int table_delete(const HashTable* tbl, vm_string*);
