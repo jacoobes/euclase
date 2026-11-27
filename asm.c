@@ -367,20 +367,19 @@ int main(int argc, char** args) {
     printf("Compiling...\n");
     asm_compile(&assembler, infinite_loop);
     
+    // ponytail: no gc_init, so the GC stays off for assembled programs. The
+    // assembler builds objects before the VM exists; enabling it needs them
+    // rooted the way compiler_link does.
     VM vm;
-    HashTable* globals=table_create();
-    HashTable* strings= table_create();
-    
+
     printf("Finding main entry...\n");
     lobj main = asm_get_entry(&assembler);
     printf("Found main entry...\n");
-    vm_create(&vm, globals, strings);
+    vm_create(&vm);
     int result = vm_exec(&vm, &main, 0);
     if(result) {
-        
+
     }
-    table_free(globals);
-    table_free(strings);
     asm_free(&assembler);
     vm_free(&vm);
     

@@ -98,7 +98,7 @@ int table_delete(const HashTable* tbl, vm_string* k) {
     return true;
 }
 
-HashTable* table_create() {
+HashTable* table_create(void) {
     HashTable* tbl = malloc(sizeof(*tbl));
     tbl->count = 0;
     tbl->capacity=0; 

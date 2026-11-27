@@ -8,32 +8,33 @@
 #include "../compiler.h"
 #include "../table.h"
 #include "../vm.h"
-#include "../darray.h"
+#include "../gc.h"
 
-// Compile and run `src` the way main.c does, then return the number stored in
-// the global `r`. Programs end with a bare `r` so the stack is not left empty.
-static double run_and_get_r(const char* src) {
+// Compile `src` and link it into `vm` the way main.c does; returns main's closure.
+static lobj compile_and_link(const char* src, VM* vm) {
     size_t count;
     SExpr** exprs = read_all(src, &count);
-    static HashTable globals, strings;
-    table_create(&globals);
-    table_create(&strings);
     Compiler compiler;
-    compiler_create(&compiler, &globals, &strings);
+    compiler_create(&compiler);
     for (size_t i = 0; i < count; i++) compiler_emit(&compiler, exprs[i]);
-    CompileUnit* main_fn = compiler.current_unit;
-    darray_push(main_fn->bytes, I_RETURN);
-    lobj main = compile_unit_get_closure(main_fn);
+    gc_init(vm);
+    vm_create(vm);
+    lobj main = compiler_link(&compiler, vm);
     compiler_destroy(&compiler);
+    return main;
+}
 
+// Compile and run `src`, then return the number stored in the global `r`.
+// Programs end with a bare `r` so the stack is not left empty.
+static double run_and_get_r(const char* src) {
     static VM vm;
-    vm_create(&vm, &globals, &strings);
+    lobj main = compile_and_link(src, &vm);
     assert(vm_exec(&vm, &main, 0) == 0);
 
-    vm_string* key = table_find_string(&strings, "r", hash_str("r", 1));
+    vm_string* key = table_find_string(vm.strings, "r", hash_str("r", 1));
     assert(key != NULL);
     lobj v;
-    assert(table_get(&globals, key, &v) == 1);
+    assert(table_get(vm.globals, key, &v) == 1);
     assert(IS_NUM(v));
     return AS_NUM(v);
 }
@@ -62,11 +63,8 @@ static int compile_in_child(const char* src) {
     if (pid == 0) {
         size_t count;
         SExpr** exprs = read_all(src, &count);
-        HashTable globals, strings;
-        table_create(&globals);
-        table_create(&strings);
         Compiler compiler;
-        compiler_create(&compiler, &globals, &strings);
+        compiler_create(&compiler);
         for (size_t i = 0; i < count; i++) compiler_emit(&compiler, exprs[i]);
         _exit(0); // compiled without error
     }
@@ -235,20 +233,8 @@ static int fails(const char* src) {
     pid_t pid = fork();
     assert(pid >= 0);
     if (pid == 0) {
-        size_t count;
-        SExpr** exprs = read_all(src, &count);
-        HashTable globals, strings;
-        table_create(&globals);
-        table_create(&strings);
-        Compiler compiler;
-        compiler_create(&compiler, &globals, &strings);
-        for (size_t i = 0; i < count; i++) compiler_emit(&compiler, exprs[i]);
-        CompileUnit* main_fn = compiler.current_unit;
-        darray_push(main_fn->bytes, I_RETURN);
-        lobj main = compile_unit_get_closure(main_fn);
-        compiler_destroy(&compiler);
         static VM vm;
-        vm_create(&vm, &globals, &strings);
+        lobj main = compile_and_link(src, &vm);
         _exit(vm_exec(&vm, &main, 0) != 0);
     }
     int status = 0;
