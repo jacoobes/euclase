@@ -323,6 +323,39 @@ void test_fn() {
     printf("test_fn passed!\n");
 }
 
+// Arithmetic and comparison operators with anything other than two operands
+// (issue #38). Zero operands must be a compile error. Other counts are still
+// undecided (reject, or variadic), so each one accepts either a compile error
+// or the right value, but never a wrong value or a leftover stack slot.
+// Runs last: it currently fails and the first failing assert aborts.
+void test_bin_op_arity() {
+    const char* ops[] = { "+", "-", "*", "/", "%", "<=", ">" };
+    char src[16];
+    for (size_t i = 0; i < sizeof ops / sizeof *ops; i++) {
+        snprintf(src, sizeof src, "(%s)", ops[i]);
+        assert(rejected(src));
+    }
+    printf("  bin op: zero operands rejected\n");
+
+    // one operand
+    assert(rejected("(var r (+ 1)) r") || run_and_get_r("(var r (+ 1)) r") == 1);
+    assert(rejected("(var r (- 5)) r") || run_and_get_r("(var r (- 5)) r") == -5);
+    printf("  bin op: one operand ok\n");
+
+    // three operands: every operand takes part, folded left
+    assert(rejected("(var r (+ 1 2 3)) r") || run_and_get_r("(var r (+ 1 2 3)) r") == 6);
+    assert(rejected("(var r (- 10 1 1)) r") || run_and_get_r("(var r (- 10 1 1)) r") == 8);
+    assert(rejected("(var r (* 2 3 4)) r") || run_and_get_r("(var r (* 2 3 4)) r") == 24);
+    printf("  bin op: three operands ok\n");
+
+    // no leftover value shifting the callee slot
+    const char* call = "(fn (id (x)) x) (var r (id (+ 1 2 3))) r";
+    assert(rejected(call) || run_and_get_r(call) == 6);
+    printf("  bin op: stack balance ok\n");
+
+    printf("test_bin_op_arity passed!\n");
+}
+
 int main() {
     test_let_duplicate_binding();
     test_if_arity();
@@ -334,6 +367,7 @@ int main() {
     test_assign();
     test_assign_value();
     test_fn();
+    test_bin_op_arity();
     printf("All tests passed!\n");
     return 0;
 }

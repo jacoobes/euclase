@@ -321,6 +321,10 @@ SExpr* expect_next_form(const SExprType ty, SExpr* exp, char* assert_msg) {
 void compiler_emit(Compiler* compiler, SExpr* sexpr);
 
 static inline void emit_bin_op(Compiler* compiler, const enum Instruction op, SExpr* rest) {
+    if(rest == NULL) {
+        printf("Binary operators must have operands\n");
+        exit(1);
+    }
     SExpr* cur;
     sexpr_list_foreach(cur, rest) {
         SExpr* hd = sexpr_list_first(cur);
