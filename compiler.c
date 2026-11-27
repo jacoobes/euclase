@@ -159,8 +159,9 @@ static int stack_effect(enum Instruction op) {
         case I_ADD: case I_SUB: case I_MUL: case I_DIV: case I_MOD:
         case I_LTE: case I_GT: case I_STR_ADD:
         case I_POP: case I_CLOSE_UPVALUE: case I_RETURN:
+        case I_SET_GLOBAL: // peeks, stores, then pops
             return -1;
-        default: // NEGATE, SET_*, JMP*, LOOP, CLOSURE (pops fn, pushes closure), CALL
+        default: // NEGATE, SET_LOCAL/SET_UPVALUE (peek), JMP*, LOOP, CLOSURE (pops fn, pushes closure), CALL
             return 0;
     }
 }
