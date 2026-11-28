@@ -48,23 +48,19 @@ void localchart_free(LocalChart* lc) {
     free(lc);
 }
 
-// index into lc->locals of the innermost visible local named symbol, or -1
-static int localchart_find(const LocalChart* lc, const char* symbol) {
-    int found = -1;
-    for (int i = 0; i < (int)darray_size(lc->locals); i++) {
-        const Local* local = &darray_item(lc->locals, i);
+// innermost visible local named symbol, or NULL. The pointer is into
+// lc->locals, so it dies on the next insert.
+Local* localchart_find(const LocalChart* lc, const char* symbol) {
+    Local* found = NULL;
+    Local* local;
+    darray_foreach(local, lc->locals) {
         if(local->depth <= lc->cur_depth && strcmp(symbol, SOLID_STR_TO_C(local->name)) == 0) {
-            found = i;
+            found = local;
         }
     }
     return found;
 }
 
-// stack slot of symbol, or -1
-int localchart_resolve_symbol(const LocalChart* lc, const char* symbol) {
-    const int i = localchart_find(lc, symbol);
-    return i == -1 ? -1 : darray_item(lc->locals, i).slot;
-}
 // binds symbol to stack slot `slot`; returns slot, or -1 if already bound in this scope
 int localchart_insert(LocalChart *lc, const char* symbol, int slot) {
     if(darray_size(lc->locals) == 256) {
@@ -376,12 +372,11 @@ int resolve_upvalue(CompileUnit* cu, const char* symbol) {
         return -1;
     }
     const LocalChart* enclosing_localchart = cu->enclosing->locals_chart;
-    const int result = localchart_find(enclosing_localchart, symbol);
-    if (result != -1) { // if it is not a local
+    Local* captured_local = localchart_find(enclosing_localchart, symbol);
+    if (captured_local != NULL) {
 #ifdef DEBUG_COMPILER
         printf("UpvalueResolution: Found local '%s' in enclosing local chart.\n", symbol);
 #endif
-        Local* captured_local = &(darray_item(enclosing_localchart->locals, result));
         captured_local->is_captured = true;
         return add_upvalue(cu, (uint8_t)captured_local->slot, true);
     }
@@ -404,9 +399,11 @@ void compiler_rebind_localsymbol(Compiler* compiler, char* symbol) {
     const LocalChart* lc = cur_unit->locals_chart;
 
     int op;
-    int arg = localchart_resolve_symbol(lc, symbol);
-    if (arg != -1) {
+    int arg;
+    const Local* local = localchart_find(lc, symbol);
+    if (local != NULL) {
         op = I_SET_LOCAL;
+        arg = local->slot;
 #ifdef DEBUG_COMPILER
         printf("emitting symbol: I_SET_LOCAL %s, %d\n",symbol, arg); ;
 #endif
@@ -432,9 +429,10 @@ void compiler_rebind_localsymbol(Compiler* compiler, char* symbol) {
 void compiler_resolve_symbol(Compiler *compiler, const char* name) {
 
     const LocalChart* lc = compiler->current_unit->locals_chart;
-    int arg = localchart_resolve_symbol(lc, name);
-    //if local was found
-    if (arg != -1) {
+    int arg;
+    const Local* local = localchart_find(lc, name);
+    if (local != NULL) {
+        arg = local->slot;
 #ifdef DEBUG_COMPILER
         printf("emitting symbol: I_GET_LOCAL %s, %d\n", name, arg); ;
 #endif
@@ -645,7 +643,8 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             // name already bound earlier in this let: the later binding
                             // overwrites it, and the pushed copy is dropped
                             compiler_emit_op(compiler, I_SET_LOCAL);
-                            compiler_write_byte(compiler, localchart_resolve_symbol(lc, lhs->value.symbol));
+                            //localchart_find may turn null, as it is a Local*. However, the if check asserts it exists
+                            compiler_write_byte(compiler, localchart_find(lc, lhs->value.symbol)->slot);
                             compiler_emit_op(compiler, I_POP);
                         }
                         cur_exp = next;
@@ -810,7 +809,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         exit(1);
                     }
 
-                    if (localchart_resolve_symbol(compiler->current_unit->locals_chart, ident) == -1
+                    if (localchart_find(compiler->current_unit->locals_chart, ident) == NULL
                      && resolve_upvalue(compiler->current_unit, ident) == -1) {
                         printf("Could not resolve symbol %s to assign value\n", ident);
                         exit(1);
