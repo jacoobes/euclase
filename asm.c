@@ -4,7 +4,7 @@
 #include <ctype.h>
 #include "asm.h"
 #include "table.h"
-#include "reader.h"
+#include "io.h"
 #include "vm.h"
 
 #define ASM_CHUNK_SIZE 256
@@ -84,6 +84,11 @@ static long parse_number(const char* token) {
         exit(1);
     }
     return value;
+}
+
+static char skip_whitespace(const char* source, int* pos) {
+    while (isspace(source[*pos])) (*pos)++;
+    return source[*pos];
 }
 
 //todo, can i turn this into slices to avoid allocation?
@@ -267,105 +272,19 @@ void asm_free(Assembler* a) {
     }
     darray_free(a->labels);
 }
-const char* add =
-    "; Simple program to add two numbers (3 + 4)\n"
-    "; Result should be 7                       \n"
-    ":add 0                                     \n"
-    "    LOAD 1                                 \n"
-    "    LOAD 2                                 \n"
-    "    ADD                                    \n"
-    "    RETURN                                 \n"
+int main(int argc, char** argv) {
+    if (argc != 3 || strcmp(argv[1], "-e") != 0) {
+        fprintf(stderr, "usage: %s -e <file.um>\n", argv[0]);
+        return 1;
+    }
+    size_t read;
+    char* program = read_file(argv[2], &read);
+    if (program == NULL) return 1;
 
-    ":main 0                                   \n"
-    "   LOAD :add                              \n"
-    "   CALL 0                                 \n"
-    "   RETURN  ; Stop program and show result\n";
-
-const char* add_arity1 =
-    "; Simple program to add two numbers (3 + 4)\n"
-    "; Result should be 7                       \n"
-    ":add 1                                     \n"
-    "    LOAD 4                                 \n"
-    "    ADD                                    \n"
-    "    RETURN                                 \n"
-
-    ":main 0                                   \n"
-    "   LOAD :add                              \n"
-    "   LOAD 3                                 \n"
-    "   CALL 1                                 \n"
-    "   RETURN  ; Stop program and show result\n";
-
-
-const char* add_arity_2 = 
-    "; Simple program to add two numbers (3 + 4)\n"
-    "; Result should be 7                       \n"
-    ":add 2                                     \n"
-    "   ADD                                     \n"
-    "   RETURN                                  \n"
-
-    ":main 0                                   \n"
-    "   LOAD :add                              \n"
-    "   LOAD 3                                 \n"
-    "   LOAD 4                                 \n"
-    "   CALL 2                                 \n"
-    "   RETURN                                 \n";
-
-const char* ifelse = 
-    ":main 0                                   \n"
-    "   LOAD 1                                 \n"
-    "   JMP_FALSY 3                            \n"
-    "   LOAD 4                                 \n"
-    "   RETURN                                 \n"
-    "   LOAD 3                                 \n"
-    "   RETURN                                 \n";
-   
-const char* infinite_loop =
-    ":main 0                                   \n"
-    "   LOAD 1                                 \n"
-    "   JMP_FALSY 6                            \n"
-    "   POP                                    \n"
-    "   LOOP 9                                 \n"
-    "   RETURN                                 \n";
-
-const char* local_variables = 
-    ":main 0                                   \n"
-    "   LOAD 1                                 \n"
-    "   LOAD 20                                \n"
-    "   ADD                                    \n"
-    "   SET_LOCAL 0                            \n"
-    "   GET_LOCAL 0                            \n"
-    "   RETURN                                 \n";
- 
-
-const char* loop4 =
-    " ; essentially this is int i = 3;         \n"
-    " ; while(i != 0) { i--; }                 \n"
-    ":main 0                                   \n"
-    "   LOAD 3                                 \n"
-    "   SET_LOCAL 0                            \n"
-    "   JMP_FALSY 9                            \n"
-    "   POP                                    \n"
-    "   GET_LOCAL 0                            \n"
-    "   LOAD 1                                 \n"
-    "   SUB                                    \n"
-    "   LOOP 14                                \n"
-    "   RETURN                                 \n";
-
-const char* should_exit = 
-    " ; no label                               \n"
-    " :                                        \n"
-    "   RETURN                                 \n";
-
-const char* invalid_fncall = 
-    " :main 0       \n"
-    "    LOAD 0     \n"
-    "    CALL 0     \n";
-
-int main(int argc, char** args) {
     Assembler assembler;
     asm_init(&assembler);
     printf("Compiling...\n");
-    asm_compile(&assembler, infinite_loop);
+    asm_compile(&assembler, program);
     
     // ponytail: no gc_init, so the GC stays off for assembled programs. The
     // assembler builds objects before the VM exists; enabling it needs them
@@ -377,12 +296,10 @@ int main(int argc, char** args) {
     printf("Found main entry...\n");
     vm_create(&vm);
     int result = vm_exec(&vm, &main, 0);
-    if(result) {
-
-    }
     asm_free(&assembler);
     vm_free(&vm);
-    
+    free(program);
+    return result;
 }
 
 

@@ -1,0 +1,11 @@
+; Simple program to add two numbers (3 + 4)
+; Result should be 7
+:add 1
+    LOAD 4
+    ADD
+    RETURN
+:main 0
+   LOAD :add
+   LOAD 3
+   CALL 1
+   RETURN  ; Stop program and show result

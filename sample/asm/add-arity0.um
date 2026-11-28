@@ -1,0 +1,10 @@
+; adds two constants (1 + 2) inside a zero-arity function
+:add 0
+    LOAD 1
+    LOAD 2
+    ADD
+    RETURN
+:main 0
+   LOAD :add
+   CALL 0
+   RETURN
