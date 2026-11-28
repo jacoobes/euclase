@@ -7,6 +7,7 @@ target("solid-waffle")
     add_files("table.c")
     add_files("memory.c")
     add_files('reader.c')
+    add_files("io.c")
     add_files("vm.c")
     if is_plat("linux", "macosx") then
          add_syslinks("readline")

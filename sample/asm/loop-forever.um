@@ -1,0 +1,6 @@
+:main 0
+   LOAD 1
+   JMP_FALSY 6
+   POP
+   LOOP 9
+   RETURN
