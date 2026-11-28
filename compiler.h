@@ -102,7 +102,7 @@ void compiler_enter_scope(const Compiler* lc);
 
 int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruction);
 
-int localchart_resolve_symbol(const LocalChart* lc, const char* symbol);
+Local* localchart_find(const LocalChart* lc, const char* symbol);
 int localchart_insert(LocalChart *lc, const char* symbol, int slot);
 // writes an opcode and applies its stack effect to current_unit->stack_depth
 void compiler_emit_op(const Compiler* compiler, enum Instruction op);
