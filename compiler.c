@@ -643,6 +643,7 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                             // name already bound earlier in this let: the later binding
                             // overwrites it, and the pushed copy is dropped
                             compiler_emit_op(compiler, I_SET_LOCAL);
+                            //localchart_find may turn null, as it is a Local*. However, the if check asserts it exists
                             compiler_write_byte(compiler, localchart_find(lc, lhs->value.symbol)->slot);
                             compiler_emit_op(compiler, I_POP);
                         }
