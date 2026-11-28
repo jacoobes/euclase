@@ -323,6 +323,52 @@ void test_fn() {
     printf("test_fn passed!\n");
 }
 
+// Runs `src` in a child (so a failing assert or VM error can't stop the
+// other cases) and reports whether `r` came out as `expected`.
+static int runs_to(const char* src, double expected) {
+    fflush(stdout);
+    pid_t pid = fork();
+    assert(pid >= 0);
+    if (pid == 0) {
+        _exit(run_and_get_r(src) == expected ? 0 : 1);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    const int ok = WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    if (!ok) printf("  FAIL (expected %g): %s\n", expected, src);
+    return ok;
+}
+
+// A local's slot must be where its value actually sits on the stack, which
+// counts temporaries already pushed for the enclosing expression, and a let
+// must leave only its result behind (issue #43).
+void test_local_stack_slot() {
+    int failed = 0;
+    // the issue's repro: one temporary (the 1) below a
+    failed += !runs_to("(var r (+ 1 (let (a 2) a))) r", 3);
+    failed += !runs_to("(var r (+ 1 (let (a 10) (+ a a)))) r", 21);
+    // two temporaries below a
+    failed += !runs_to("(var r (+ 1 (+ 2 (let (a 10) a)))) r", 13);
+    // several bindings
+    failed += !runs_to("(var r (+ 1 (let (a 2 b 3) (+ a b)))) r", 6);
+    // nested lets under a temporary
+    failed += !runs_to("(var r (+ 100 (let (a 1) (let (b 2) (+ a b))))) r", 103);
+    // inside a function frame, below a parameter's use
+    failed += !runs_to("(fn (f (x)) (+ x (let (a 10) a))) (var r (f 1)) r", 11);
+    // after a top-level var (its value is popped)
+    failed += !runs_to("(var x 1) (var r (+ 1 (let (a 2) a))) r", 3);
+    // the let must not leave its locals on the stack: here they would be
+    // taken as the callee or an argument
+    failed += !runs_to("(fn (add (x y)) (+ x y)) (var r (add (let (a 1) a) 2)) r", 3);
+    // the issue's nested fn repro: binding g must not overwrite `one`
+    failed += !runs_to("(fn (one (a)) 1) (fn (f ()) (one (fn (g ()) 2))) (var r (f)) r", 1);
+    // guard (passes today): a closure over a let local must still see it
+    failed += !runs_to("(fn (mk ()) (let (x 5) (fn (get ()) x))) (var g (mk)) (var r (g)) r", 5);
+    if (failed) printf("  %d case(s) failed\n", failed);
+    assert(failed == 0);
+    printf("test_local_stack_slot passed!\n");
+}
+
 int main() {
     test_let_duplicate_binding();
     test_if_arity();
@@ -334,6 +380,7 @@ int main() {
     test_assign();
     test_assign_value();
     test_fn();
+    test_local_stack_slot();
     printf("All tests passed!\n");
     return 0;
 }

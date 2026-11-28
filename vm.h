@@ -40,7 +40,8 @@ enum Instruction {
     I_GET_UPVALUE ,
     I_SET_UPVALUE ,
     I_CLOSE_UPVALUE ,
-    I_STR_ADD
+    I_STR_ADD     ,
+    I_POP_SCOPE     // operand n: drop the n values under the top, keep the top
 };
 
 
