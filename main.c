@@ -7,7 +7,6 @@
 #include "vm.h"
 #include "reader.h"
 #include "compiler.h"
-#include "darray.h"  
 
 
 #define QUOTE(...) #__VA_ARGS__

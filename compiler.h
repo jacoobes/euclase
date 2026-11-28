@@ -9,17 +9,25 @@
 #define MAX_ARGS 256
 
 
-
+/**
+ * An value which that is in the stack frame. 
+ */
 typedef struct Local {
     solid_str name;
+    // the depth is the scope of where the local value had been declared.
+    // how many scopes were open when this local was declared;
+    // leaving a scope drops every local deeper than the new LocalChart.cur_depth
     size_t depth;
-    //can we squish this to a byte? need to bound check locals insert check to ensure
-    int reg;
+    // the local's value lives, counted from the frame's base
+    // can we squish this to a byte? need to bound check locals insert check to ensure
+    // localchart_insert rejects slots above UINT8_MAX
+    int slot;
     bool is_captured;
 } Local;
 
 
 typedef struct LocalChart {
+    // Tracks the current depth of 
     int cur_depth;
     darray(Local) locals;
 } LocalChart;
@@ -55,7 +63,13 @@ struct CompileUnit {
     //owned: need to free this
     char* name;
     int arity;
+
+    // values the VM will have in this frame at the current emit point, slot 0
+    // (the callee) included. A new local's slot is stack_depth - 1.
+    int stack_depth;
+
     struct CompileUnit* enclosing;
+
 };
 
 // name is duplicated, need to manage memory
@@ -64,9 +78,7 @@ void compileunit_free(CompileUnit* cu);
 
 
 typedef struct {
-    // darray(CompileUnit*) units;
-    // current_unit belongs to units, so when we clean up, we set to NULL, and then
-    // just free units
+    // current_unit belongs to units, so when we clean up, we set to NULL, and then just free units
     CompileUnit* current_unit;
     // interned strings, deduplicated; Const.as.str indexes into this
     darray(solid_str) strings;
@@ -91,7 +103,9 @@ void compiler_enter_scope(const Compiler* lc);
 int compiler_jump_emit(const Compiler* compiler, const enum Instruction instruction);
 
 int localchart_resolve_symbol(const LocalChart* lc, const char* symbol);
-int localchart_insert(LocalChart *lc, const char* symbol);
+int localchart_insert(LocalChart *lc, const char* symbol, int slot);
+// writes an opcode and applies its stack effect to current_unit->stack_depth
+void compiler_emit_op(const Compiler* compiler, enum Instruction op);
 
 void compiler_jump_patch(const Compiler* compiler, size_t ushort_begin, size_t jump_loc);
 void compileunit_write_ushort(CompileUnit* cur_unit, const unsigned short jump_loc);
@@ -107,4 +121,3 @@ void compiler_emit(Compiler* compiler, SExpr* sexpr);
 lobj compiler_link(Compiler* compiler, VM* vm);
 
 #endif
-

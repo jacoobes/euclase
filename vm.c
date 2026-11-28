@@ -657,6 +657,17 @@ int vm_exec(VM *vm, lobj* main, int flags) {
                     return 1;
                 }
             } break;
+            case I_POP_SCOPE: {
+                // leaving a let: like I_RETURN, but drops only the let's n slots
+                uint8_t n = READ_BYTE();
+                lobj value = vm_pop(vm);
+#ifdef DEBUG
+                printf("I_POP_SCOPE %d ", n); lobj_println(&value);
+#endif
+                close_upvalues(vm, vm->stack_top - n);
+                vm->stack_top -= n;
+                vm_push(vm, value);
+            } break;
             default: {
                 printf("Unknown opcode '%c', misalignment?", instruction);
                 return 1;
