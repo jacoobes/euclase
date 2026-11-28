@@ -129,11 +129,10 @@ vm_string* table_find_string(HashTable* table, const char* ss, uint32_t hash) {
   }
 }
 
+// frees the entries and the table itself; keys are owned by the GC
 void table_free(HashTable* tbl) {
-    FREE_ARRAY(TableEntry, tbl->entries, tbl->count);
-    tbl->count = 0;
-    tbl->capacity=0; 
-    tbl->entries=NULL;
+    free(tbl->entries);
+    free(tbl);
 }
 
 void table_print(HashTable* table) {

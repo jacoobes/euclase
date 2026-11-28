@@ -84,8 +84,6 @@ lobj lobj_str(const char* contents) {
     };
 }
 
-/* Create a new number type lval */
-
 vm_function* vm_function_create(
     uint8_t* initial_code,
     const uint8_t code_ct,
@@ -117,6 +115,8 @@ void vm_object_free(vm_object* obj) {
         } break;
         case OBJ_FUNC : {
             vm_function* fn=(vm_function*)obj;
+            free(fn->values);  // plain free: malloc'd outside reallocate
+            free(fn->chunk);   // cu->bytes.item, also handed over at link
             FREE(vm_function, fn);
         } break;
         case OBJ_CLOSURE: {
@@ -321,9 +321,9 @@ static void close_upvalues(VM* vm, lobj* last) {
 }
 
 /*
- * Returns a heap allocated string of stack trace.
+ * Prints the stack trace of the current call frames.
  */
-solid_str vm_stacktrace(VM* vm, char* error) {
+void vm_stacktrace(VM* vm, char* error) {
     solid_str stack_trace = solid_str_new("");
     printf("Error: stacktrace(frames=%d)\n", vm->frame_count);
     for(int i = 0; i < vm->frame_count; i++) {
@@ -338,7 +338,8 @@ solid_str vm_stacktrace(VM* vm, char* error) {
             solid_str_appends(&stack_trace,  "\n");
         }
     }
-    return stack_trace;
+    printf("%s", SOLID_STR_TO_C(stack_trace));
+    solid_str_free(&stack_trace);
 }
 
 
@@ -381,7 +382,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
 #endif
                 if(const_idx > cur_frame->closure->fn->values_ct) {
                     char* err = "const idx exceeds value count";
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, err)));
+                    vm_stacktrace(vm, err);
                     return 1;
                 }
                 vm_push(vm, CONSTANT_AT(const_idx));
@@ -391,7 +392,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
                 if (a.type == LVAL_NUM) {
                     vm_push(vm, (lobj){LVAL_NUM, {.num = -a.v.num}});
                 } else {
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror: Negate")));
+                    vm_stacktrace(vm, "Typeerror: Negate");
                     return 1;
                 }
             } break;
@@ -404,7 +405,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
 #endif
                     vm_push(vm, result);
                 } else { printf("b:%d a:%d\n",b.type, a.type);
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror ADD")));
+                    vm_stacktrace(vm, "Typeerror ADD");
                     return 1;
                 }
             } break;
@@ -416,7 +417,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
 #endif
                     vm_push(vm, lobj_num(a.v.num - b.v.num));
                 } else {
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror SUB")));
+                    vm_stacktrace(vm, "Typeerror SUB");
                     return 1;
                 }
             } break;
@@ -426,7 +427,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
 
                     vm_push(vm, lobj_num(a.v.num * b.v.num));
                 } else {
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror MUL")));
+                    vm_stacktrace(vm, "Typeerror MUL");
                     return 1;
                 }
             } break;
@@ -435,7 +436,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
                 if (IS_NUM(a) && IS_NUM(b)) {
                     vm_push(vm, lobj_num(AS_NUM(a) / AS_NUM(b)));
                 } else {
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror MUL")));
+                    vm_stacktrace(vm, "Typeerror MUL");
                     return 1;
                 }
             } break;
@@ -445,7 +446,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
                     lobj result = {LVAL_NUM, {.num = (int)a.v.num % (int)b.v.num}};
                     vm_push(vm, result);
                 } else {
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror MOD")));
+                    vm_stacktrace(vm, "Typeerror MOD");
                     return 1;
                 }
             } break;
@@ -455,7 +456,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
                     lobj result = {LVAL_NUM, {.num = (a.v.num <= b.v.num)}};
                     vm_push(vm, result);
                 } else {
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror LTE")));
+                    vm_stacktrace(vm, "Typeerror LTE");
                     return 1;
                 }
             } break;
@@ -465,7 +466,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
                     lobj result = {LVAL_NUM, {.num = (a.v.num > b.v.num)}};
                     vm_push(vm, result);
                 } else {
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror LTE")));
+                    vm_stacktrace(vm, "Typeerror LTE");
                     return 1;
                 }
             } break;
@@ -493,14 +494,12 @@ int vm_exec(VM *vm, lobj* main, int flags) {
                     vm_push(vm,result);
                     res = 0;
                 } else {
-                    solid_str stack_trace = vm_stacktrace(vm, "Uncallable lobj -> needs callable object");
-                    printf("%s", SOLID_STR_TO_C(stack_trace));
+                    vm_stacktrace(vm, "Uncallable lobj -> needs callable object");
                     return 1;
                 }
 
                 if(res != 0) { 
-                    solid_str stack_trace = vm_stacktrace(vm, "Failed to call an lobj");
-                    printf("%s", SOLID_STR_TO_C(stack_trace));
+                    vm_stacktrace(vm, "Failed to call an lobj");
                     return 1;
                 }
             } break;
@@ -653,7 +652,7 @@ int vm_exec(VM *vm, lobj* main, int flags) {
 
                     vm_push(vm, into_lobj(NULL));
                 } else {
-                    printf("%s", SOLID_STR_TO_C(vm_stacktrace(vm, "Typeerror SUB")));
+                    vm_stacktrace(vm, "Typeerror SUB");
                     return 1;
                 }
             } break;
@@ -684,4 +683,11 @@ int vm_exec(VM *vm, lobj* main, int flags) {
 void vm_free(const VM* vm) {
     table_free(vm->globals);
     table_free(vm->strings);
+
+    // open upvalues is tracked by gc
+    // main fn tracked by gc
+    
+    // free the graystack buf but not the objects under it 
+    // those are managed by the gc
+    free(vm->gray_stack);
 }

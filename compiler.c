@@ -242,7 +242,9 @@ static vm_function* link_unit(const Compiler* compiler, CompileUnit* cu, VM* vm)
     lobj nm = into_lobj(intern(vm, &name));
     vm_push(vm, nm); // mark as a root for gc to track.
     vm_function* fn = vm_function_create(cu->bytes.item, darray_size(cu->bytes),
-                                         values, n, cu->arity, nm, cu->upvalue_count);
+                                         values, n,
+                                         cu->arity, nm,
+                                         cu->upvalue_count);
     solid_str_free(&name);
     // n constants + the name; fn traces them from here on
     for (size_t i = 0; i <= n; i++) vm_pop(vm);

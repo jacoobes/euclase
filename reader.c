@@ -82,9 +82,12 @@ SExpr *read_symbol(const char *input, int *pos) {
     if (strcmp(symbol, "true") == 0) {
         expr->type = SEXPR_NUMBER;
         expr->value.number = 1;
+            
+        free(symbol); // we don't use symbol in this branch. Free it
     } else if (strcmp(symbol, "false") == 0) {
         expr->type = SEXPR_NUMBER;
         expr->value.number = 0;
+        free(symbol); // we don't use symbol in this branch. Free it
     } else {
         expr->type = SEXPR_SYMBOL;
         expr->value.symbol = symbol;
@@ -295,4 +298,6 @@ void free_sexpr(SExpr *expr) {
         } break;
         case SEXPR_NUMBER: {} break;
     }
+    // free the object holding it.
+    free(expr);
 }

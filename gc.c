@@ -34,6 +34,15 @@ void gc_add_obj(vm_object* obj) {
 
 // Optional cleanup on exit
 void gc_shutdown() {
+    vm_object* objs = gc.objs;
+    // i think it doesnt matter if object is null or not. because the last sweep done removes it from the chain. this 
+    // is the remaining objects
+    while(objs != NULL) {
+        vm_object* next = objs->next;
+        vm_object_free(objs);
+        objs = next;
+    }
+    gc.objs=NULL;
 #ifdef DEBUG_LOG_GC
     printf("[GC] Shutdown complete\n");
 #endif
