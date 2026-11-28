@@ -57,7 +57,6 @@ void test_hashtable() {
 
     // Cleanup
     table_free(table);
-    free(table);
     free(key1);
     free(key2);
 
@@ -107,7 +106,6 @@ void test_hashtable_growth() {
     assert(table_find_string(table, "missing", hash_str("missing", 7)) == NULL);
 
     table_free(table);
-    free(table);
     for (int i = 0; i < N; i++) {
         solid_str_free(&keys[i]->contents);
         free(keys[i]);
@@ -170,7 +168,6 @@ void test_hashtable_delete_keeps_colliding_keys() {
     assert(table_get(table, keys[0], &v) == 0);
 
     table_free(table);
-    free(table);
     for (int i = 0; i < N; i++) { solid_str_free(&keys[i]->contents); free(keys[i]); }
     for (int i = 0; i < 4; i++) { solid_str_free(&extra[i]->contents); free(extra[i]); }
     printf("test_hashtable_delete_keeps_colliding_keys passed!\n");

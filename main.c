@@ -63,8 +63,7 @@ int main(int argc, char **argv) {
                        (+ a b)))
                 (var s (cookie 20))
 
-                (print (s 20))
-            );
+                (print (s 20)));
 
 
             printf("program:\n '%s'\n", fib);
@@ -95,6 +94,7 @@ int main(int argc, char **argv) {
             for(int i =0; i < count; i++) {
                 free_sexpr(exprs[i]);
             }
+            free(exprs);
 
         } else {
             size_t read;
@@ -118,6 +118,7 @@ int main(int argc, char **argv) {
             for(int i =0; i < count; i++) {
                 free_sexpr(exprs[i]);
             }
+            free(exprs);
 
             CompileUnit* main_fn= compiler.current_unit;
             if(main_fn == NULL) {

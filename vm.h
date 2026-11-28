@@ -159,8 +159,6 @@ typedef struct VM {
     vm_closure* main_fn;
     int frame_count;
     
-    vm_object* objects;
-
     int gray_count;
     int gray_capacity;
     vm_object** gray_stack;
@@ -198,7 +196,7 @@ int vm_exec(VM*, lobj*, int);
 void vm_free(const VM* vm);
 
 
-solid_str vm_stacktrace(VM* vm, char* error);
+void vm_stacktrace(VM* vm, char* error);
 
 
 
