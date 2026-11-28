@@ -369,6 +369,26 @@ void test_local_stack_slot() {
     printf("test_local_stack_slot passed!\n");
 }
 
+// A call whose head is itself an expression, e.g. `((f) x)`, compiles the
+// head to get the callee, then calls it like any other function (issue #42).
+void test_call_expr_head() {
+    int failed = 0;
+    // the issue's repro
+    failed += !runs_to("(fn (id (x)) x) (var r ((id id) 5)) r", 5);
+    // nested heads
+    failed += !runs_to("(fn (id (x)) x) (var r (((id id) id) 5)) r", 5);
+    // calling a returned closure, which uses its captured value
+    failed += !runs_to("(fn (adder (n)) (fn (add (x)) (+ x n)) add)"
+                       "(var r ((adder 10) 5)) r", 15);
+    // the head must be compiled exactly once: an extra copy left on the stack
+    // would be taken as the callee or an argument of the outer call
+    failed += !runs_to("(fn (id (x)) x) (fn (add (x y)) (+ x y))"
+                       "(var r (add ((id id) 1) 2)) r", 3);
+    if (failed) printf("  %d case(s) failed\n", failed);
+    assert(failed == 0);
+    printf("test_call_expr_head passed!\n");
+}
+
 int main() {
     test_let_duplicate_binding();
     test_if_arity();
@@ -381,6 +401,7 @@ int main() {
     test_assign_value();
     test_fn();
     test_local_stack_slot();
+    test_call_expr_head();
     printf("All tests passed!\n");
     return 0;
 }

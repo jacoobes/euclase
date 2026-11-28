@@ -827,7 +827,6 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                         exit(1);
                     }
 
-                    //emit I_GET_GLOBAL symbol
                     compiler_emit(compiler, list_head);
 
                     SExpr* cur_exp;
@@ -844,10 +843,34 @@ void compiler_emit(Compiler* compiler, SExpr *sexpr) {
                     printf("emitting: I_CALL %d for %s\n", argc, symbol);
 #endif
                 }
-            }  
-            else {
-                printf("TODO\n");
-                exit(1);
+            }  else { // HEAD OF LIST IS NOT A SYMBOL
+                if(list_head->type == SEXPR_LIST) {
+                    SExpr* rest = sexpr_list_rest(cur);
+                    const int argc = sexpr_list_len(rest);
+                    if(argc > MAX_ARGS) {
+                        printf("Too many arguments!\n");
+                        exit(1);
+                    }
+                    compiler_emit(compiler, list_head); // function is now at top of stack
+
+                    SExpr* cur_exp;
+                    //emit bytecode for arguments
+                    sexpr_list_foreach(cur_exp, rest) {
+                        compiler_emit(compiler, sexpr_list_first(cur_exp));
+                    }
+
+                    // need to emit I_CALL N where N is number of args
+                    compiler_emit_op(compiler, I_CALL);
+                    compiler_write_byte(compiler, argc);
+                    compiler->current_unit->stack_depth -= argc; // callee + args -> result
+#ifdef DEBUG_COMPILER
+                    printf("emitting: I_CALL %d\n", argc);
+#endif
+                } else {
+                    printf("TODO\n");
+                    exit(1);
+                }
+                
             }
         }
         break;
